@@ -45,7 +45,7 @@ The package requires Python 3.10 or newer and currently declares version `0.1.0`
 | `licenses` | PEP 639 and SPDX expression grammar | Parses the distribution's SPDX expression, checks declared license files in source/sdist/wheel, and resolves custom file-scoped LicenseRef evidence. |
 | `deprecations` | Project policy informed by PEP 387 | Records actual `DeprecationWarning` observations for selected marker rows and derives the effective warning start only after all required rows have emitted. |
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the dependency graph, each result type, the reduction analysis, and known evidence limits.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the dependency graph and result types, and [docs/DESIGN_RATIONALE.md](docs/DESIGN_RATIONALE.md) for the boundary scene, counterfactual motivation, reducibility test, and falsification targets.
 
 ## The dependency chain
 
