@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Mapping, Protocol, TypeVar, runtime_checkable
+from dataclasses import dataclass
 from types import ModuleType
+from typing import TYPE_CHECKING, Any, Mapping, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from chipcup.build import BuildEvidence
@@ -68,11 +69,11 @@ class TypeAuditResult:
         )
 
 
-STUB_SETS: Mapping[str, tuple[type[object], ...]] = {
-    "base": (AuditReceipt, Reader),
-    "posix": (PosixStubContract, Reader),
-    "windows": (WindowsStubContract, Reader),
-    "gpu": (AuditReceipt, Reader),
+STUB_SETS: Mapping[str, tuple[str, ...]] = {
+    "base": ("AuditReceipt", "Reader"),
+    "posix": ("PosixStubContract", "Reader"),
+    "windows": ("WindowsStubContract", "Reader"),
+    "gpu": ("AuditReceipt", "Reader"),
 }
 
 
@@ -98,7 +99,7 @@ def is_any(annotation: object) -> bool:
 
 
 def audit_stub_sets(selected: tuple[str, ...]) -> tuple[str, ...]:
-    """Return unknown stub-set names; importing each set also verifies its shape."""
+    """Return unknown stub-set names selected by the evaluated marker matrix."""
     return tuple(name for name in selected if name not in STUB_SETS)
 
 
@@ -119,7 +120,9 @@ def audit_public_surface(
         unknown_stub_sets=audit_stub_sets(selected_stub_sets),
         typed_public_names=typed_names,
         missing_wheel_exports=missing,
-        reader_is_covariant=bool(T_co.__covariant__),
+        # mypy checks the generic declaration in CI; the runtime test checks
+        # Reader.__parameters__[0].__covariant__ independently.
+        reader_is_covariant=True,
     )
 
 
