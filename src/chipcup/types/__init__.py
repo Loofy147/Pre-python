@@ -18,6 +18,7 @@ __all__ = [
     "audit_public_surface",
     "audit_stub_sets",
     "is_any",
+    "load",
     "prepare_build_receipt",
 ]
 
@@ -55,6 +56,7 @@ class WindowsStubContract(Protocol):
 @dataclass(frozen=True, slots=True)
 class TypeAuditResult:
     selected_stub_sets: tuple[str, ...]
+    loaded_stub_contracts: Mapping[str, tuple[str, ...]]
     unknown_stub_sets: tuple[str, ...]
     typed_public_names: Mapping[str, tuple[str, ...]]
     missing_wheel_exports: Mapping[str, tuple[str, ...]]
@@ -69,11 +71,11 @@ class TypeAuditResult:
         )
 
 
-STUB_SETS: Mapping[str, tuple[str, ...]] = {
-    "base": ("AuditReceipt", "Reader"),
-    "posix": ("PosixStubContract", "Reader"),
-    "windows": ("WindowsStubContract", "Reader"),
-    "gpu": ("AuditReceipt", "Reader"),
+STUB_SETS: Mapping[str, tuple[type[object], ...]] = {
+    "base": (AuditReceipt, Reader),
+    "posix": (PosixStubContract, Reader),
+    "windows": (WindowsStubContract, Reader),
+    "gpu": (AuditReceipt, Reader),
 }
 
 
@@ -98,6 +100,14 @@ def is_any(annotation: object) -> bool:
     return annotation is Any
 
 
+def load(stub_set: str) -> tuple[type[object], ...]:
+    """Load the actual protocol contracts selected by a PEP 508 matrix row."""
+    try:
+        return STUB_SETS[stub_set]
+    except KeyError as error:
+        raise ValueError(f"unknown chipcup stub set {stub_set!r}") from error
+
+
 def audit_stub_sets(selected: tuple[str, ...]) -> tuple[str, ...]:
     """Return unknown stub-set names selected by the evaluated marker matrix."""
     return tuple(name for name in selected if name not in STUB_SETS)
@@ -115,8 +125,14 @@ def audit_public_surface(
         typed_names[module_name] = names
         artifact_names = set(wheel_exports.get(module_name, ()))
         missing[module_name] = tuple(name for name in names if name not in artifact_names)
+    loaded_contracts = {
+        name: tuple(contract.__name__ for contract in load(name))
+        for name in selected_stub_sets
+        if name in STUB_SETS
+    }
     return TypeAuditResult(
         selected_stub_sets=selected_stub_sets,
+        loaded_stub_contracts=loaded_contracts,
         unknown_stub_sets=audit_stub_sets(selected_stub_sets),
         typed_public_names=typed_names,
         missing_wheel_exports=missing,
