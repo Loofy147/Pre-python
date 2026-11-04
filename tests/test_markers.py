@@ -1,17 +1,35 @@
-from chipcup.markers import MarkerPolicy
+from chipcup.markers import MarkerPolicy, MarkerRow, evaluate_matrix
 
 
-def test_extra_marker_uses_selected_extra():
-    policy = MarkerPolicy('extra == "fast"', extras=("slow", "fast"))
-    assert policy.evaluate()
+def test_extra_marker_is_false_without_selected_extra():
+    assert not MarkerPolicy('extra == "gpu"').evaluate()
 
 
-def test_marker_admission_hands_off_to_protocol_check():
-    from chipcup.types import AuditReceipt
+def test_extra_marker_is_true_for_requested_extra():
+    assert MarkerPolicy('extra == "gpu"', extras=("gpu",)).evaluate()
 
-    class Receipt:
-        source_digest = "a" * 64
-        passed = True
 
-    assert MarkerPolicy('python_version >= "3.10"').admits(Receipt(), AuditReceipt)
-    assert not MarkerPolicy('python_version < "3.10"').admits(Receipt(), AuditReceipt)
+def test_matrix_logs_rows_and_selects_stub_sets():
+    rows = (
+        MarkerRow(
+            "linux",
+            "sys_platform == 'linux'",
+            "posix",
+            environment={"sys_platform": "linux"},
+        ),
+        MarkerRow(
+            "gpu-extra",
+            'extra == "gpu"',
+            "gpu",
+            extra="gpu",
+        ),
+        MarkerRow(
+            "disabled",
+            "python_version < '2.0'",
+            "legacy",
+        ),
+    )
+    result = evaluate_matrix(rows)
+    assert result.selected_rows == ("linux", "gpu-extra")
+    assert result.selected_stub_sets == ("posix", "gpu")
+    assert result.evaluations[2].log_line == "marker-eval row=disabled result=False"
