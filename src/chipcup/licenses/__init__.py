@@ -1,4 +1,4 @@
-"""PEP 639 file coverage and a small SPDX expression grammar parser."""
+"""PEP 639 License-Expression, License-File and custom LicenseRef checks."""
 
 from __future__ import annotations
 
@@ -7,10 +7,31 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
+from chipcup.deprecations import (
+    DeprecationSchedule,
+    validate_license_dependencies,
+)
+
+__all__ = [
+    "DEFAULT_LICENSE_REFS",
+    "LicenseAuditResult",
+    "LicenseNode",
+    "check_artifact_license_coverage",
+    "check_license_files",
+    "license_references",
+    "parse_license_expression",
+    "validate_compatibility",
+]
+
 _TOKEN = re.compile(
-    r"\s*(\(|\)|AND\b|OR\b|WITH\b|[A-Za-z0-9][A-Za-z0-9.+:-]*)",
+    r"\\s*(\\(|\\)|AND\\b|OR\\b|WITH\\b|[A-Za-z0-9][A-Za-z0-9.+:-]*)",
     re.IGNORECASE,
 )
+_LICENSE_REF_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]*$")
+
+DEFAULT_LICENSE_REFS: Mapping[str, str] = {
+    "LicenseRef-Fixture-Dual": "LICENSES/Fixture-Dual.txt",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +39,21 @@ class LicenseNode:
     kind: str
     value: str | None = None
     children: tuple["LicenseNode", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class LicenseAuditResult:
+    expression: str
+    references: tuple[str, ...]
+    declared_files: tuple[str, ...]
+    missing_source_files: tuple[str, ...]
+    missing_artifact_files: Mapping[str, tuple[str, ...]]
+    dependency_issues: tuple[str, ...]
+    issues: tuple[str, ...]
+
+    @property
+    def passed(self) -> bool:
+        return not self.issues
 
 
 def _tokens(expression: str) -> list[str]:
@@ -29,7 +65,10 @@ def _tokens(expression: str) -> list[str]:
         match = _TOKEN.match(expression, position)
         if match is None:
             raise ValueError(f"invalid SPDX expression near {expression[position:]!r}")
-        result.append(match.group(1))
+        token = match.group(1)
+        if token.startswith("LicenseRef-") and not _LICENSE_REF_ID.fullmatch(token[len("LicenseRef-"):]):
+            raise ValueError(f"invalid SPDX LicenseRef identifier {token!r}")
+        result.append(token)
         position = match.end()
     if not result:
         raise ValueError("SPDX expression cannot be empty")
@@ -37,7 +76,7 @@ def _tokens(expression: str) -> list[str]:
 
 
 def parse_license_expression(expression: str) -> LicenseNode:
-    """Parse SPDX AND/OR/WITH grouping; identifier-list validation is separate."""
+    """Parse SPDX AND/OR/WITH grammar; identifier-list validation is separate."""
     tokens = _tokens(expression)
     index = 0
 
@@ -103,8 +142,8 @@ def license_references(node: LicenseNode) -> tuple[str, ...]:
 
 
 def _covered(member: str, requested: str) -> bool:
-    normalized = member.replace("\\", "/").lstrip("./")
-    target = requested.replace("\\", "/").lstrip("./")
+    normalized = member.replace("\\\\", "/").lstrip("./")
+    target = requested.replace("\\\\", "/").lstrip("./")
     basename = Path(target).name
     return (
         normalized == target
@@ -123,12 +162,18 @@ def check_artifact_license_coverage(
     )
 
 
-def check_license_files(root: str | Path, license_files: Iterable[str]) -> tuple[str, ...]:
+def check_license_files(
+    root: str | Path, license_files: Iterable[str]
+) -> tuple[str, ...]:
     base = Path(root).resolve()
     missing: list[str] = []
     for filename in license_files:
         candidate = (base / filename).resolve()
-        if base not in candidate.parents or not candidate.is_file() or candidate.stat().st_size == 0:
+        if (
+            base not in candidate.parents
+            or not candidate.is_file()
+            or candidate.stat().st_size == 0
+        ):
             missing.append(filename)
     return tuple(missing)
 
@@ -140,25 +185,53 @@ def validate_compatibility(
     *,
     root: str | Path,
     license_refs: Mapping[str, str] | None = None,
-    deprecations: Sequence[object] = (),
-    published_releases: Sequence[str] = (),
-) -> LicenseNode:
-    """Validate syntax, LicenseRef mapping, artifact coverage and shim schedules."""
+    deprecations: Sequence[DeprecationSchedule] = (),
+) -> LicenseAuditResult:
+    """Validate SPDX syntax, LicenseRef mapping and file coverage per artifact."""
     tree = parse_license_expression(expression)
     refs = license_references(tree)
-    reference_map = dict(license_refs or {})
-    unmapped = [reference for reference in refs if reference not in reference_map]
-    if unmapped:
-        raise ValueError(f"unmapped SPDX LicenseRef identifiers: {', '.join(unmapped)}")
-    required = tuple(dict.fromkeys((*license_files, *reference_map.values())))
-    missing_on_disk = check_license_files(root, required)
-    if missing_on_disk:
-        raise ValueError(f"license files missing from source tree: {', '.join(missing_on_disk)}")
-    for artifact_name, members in artifacts.items():
-        missing = check_artifact_license_coverage(members, required)
-        if missing:
-            raise ValueError(f"{artifact_name} is missing license files: {', '.join(missing)}")
-    from chipcup.deprecations import validate_schedules
+    reference_map = dict(DEFAULT_LICENSE_REFS if license_refs is None else license_refs)
+    issues: list[str] = []
 
-    validate_schedules(deprecations, published_releases)
-    return tree
+    unresolved = tuple(reference for reference in refs if reference not in reference_map)
+    if unresolved:
+        issues.append(f"unmapped SPDX LicenseRef identifiers: {', '.join(unresolved)}")
+
+    declared = tuple(dict.fromkeys(license_files))
+    for reference in refs:
+        mapped_path = reference_map.get(reference)
+        if mapped_path is not None and mapped_path not in declared:
+            issues.append(
+                f"{reference} maps to {mapped_path}, which is not declared as License-File"
+            )
+
+    required_files = tuple(
+        dict.fromkeys((*declared, *(reference_map[item] for item in refs if item in reference_map)))
+    )
+    missing_source = check_license_files(root, required_files)
+    missing_artifacts: dict[str, tuple[str, ...]] = {}
+    for artifact_name, members in artifacts.items():
+        missing = check_artifact_license_coverage(members, required_files)
+        if missing:
+            missing_artifacts[artifact_name] = missing
+            issues.append(
+                f"{artifact_name} is missing License-File coverage: {', '.join(missing)}"
+            )
+    if missing_source:
+        issues.append(
+            f"source tree is missing license text files: {', '.join(missing_source)}"
+        )
+
+    dependency_issues = validate_license_dependencies(
+        deprecations, reference_map, declared
+    )
+    issues.extend(dependency_issues)
+    return LicenseAuditResult(
+        expression=expression,
+        references=refs,
+        declared_files=declared,
+        missing_source_files=missing_source,
+        missing_artifact_files=missing_artifacts,
+        dependency_issues=dependency_issues,
+        issues=tuple(issues),
+    )
