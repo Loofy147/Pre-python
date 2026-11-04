@@ -131,6 +131,7 @@ def evaluate_release(request: GateRequest) -> GateReport:
             request.license_files,
             root=request.project_root,
             license_refs=request.license_refs,
+            deprecations=request.deprecations,
             published_releases=request.published_releases,
         )
         steps.append(GateStep(

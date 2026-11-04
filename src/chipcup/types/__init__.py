@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
+
+if TYPE_CHECKING:
+    from chipcup.build import BuildEvidence
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -34,7 +37,7 @@ def is_any(annotation: object) -> bool:
     return annotation is Any
 
 
-def prepare_build_receipt(receipt: object) -> object:
+def prepare_build_receipt(receipt: object) -> BuildEvidence:
     if not isinstance(receipt, AuditReceipt):
         raise TypeError("receipt does not satisfy the AuditReceipt protocol")
     from chipcup.build import accept_type_receipt
