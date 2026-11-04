@@ -14,6 +14,7 @@ from chipcup.deprecations import (
 
 __all__ = [
     "DEFAULT_LICENSE_REFS",
+    "DEFAULT_LICENSE_REF_SUBJECTS",
     "LicenseAuditResult",
     "LicenseNode",
     "check_artifact_license_coverage",
@@ -32,6 +33,9 @@ _LICENSE_REF_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]*$")
 DEFAULT_LICENSE_REFS: Mapping[str, str] = {
     "LicenseRef-Fixture-Dual": "LICENSES/Fixture-Dual.txt",
 }
+DEFAULT_LICENSE_REF_SUBJECTS: Mapping[str, tuple[str, ...]] = {
+    "LicenseRef-Fixture-Dual": ("fixtures/chip.dat",),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +53,9 @@ class LicenseAuditResult:
     missing_source_files: tuple[str, ...]
     missing_artifact_files: Mapping[str, tuple[str, ...]]
     dependency_issues: tuple[str, ...]
+    reference_subjects: Mapping[str, tuple[str, ...]]
+    missing_subject_source_files: Mapping[str, tuple[str, ...]]
+    missing_subject_artifact_files: Mapping[str, Mapping[str, tuple[str, ...]]]
     issues: tuple[str, ...]
 
     @property
@@ -185,12 +192,18 @@ def validate_compatibility(
     *,
     root: str | Path,
     license_refs: Mapping[str, str] | None = None,
+    license_ref_subjects: Mapping[str, Sequence[str]] | None = None,
     deprecations: Sequence[DeprecationSchedule] = (),
 ) -> LicenseAuditResult:
     """Validate SPDX syntax, LicenseRef mapping and file coverage per artifact."""
     tree = parse_license_expression(expression)
     expression_refs = license_references(tree)
     reference_map = dict(DEFAULT_LICENSE_REFS if license_refs is None else license_refs)
+    subject_map = dict(
+        DEFAULT_LICENSE_REF_SUBJECTS
+        if license_ref_subjects is None
+        else license_ref_subjects
+    )
     # Supplemental refs describe file-scoped grants that PEP 639's single
     # distribution-level License-Expression cannot scope to individual files.
     refs = tuple(sorted(set(expression_refs) | set(reference_map)))
@@ -225,6 +238,32 @@ def validate_compatibility(
             f"source tree is missing license text files: {', '.join(missing_source)}"
         )
 
+    reference_subjects = {
+        reference: tuple(subject_map[reference])
+        for reference in refs
+        if reference in subject_map
+    }
+    missing_subject_source: dict[str, tuple[str, ...]] = {}
+    missing_subject_artifacts: dict[str, dict[str, tuple[str, ...]]] = {}
+    for reference, subjects in reference_subjects.items():
+        missing_source_subjects = check_license_files(root, subjects)
+        if missing_source_subjects:
+            missing_subject_source[reference] = missing_source_subjects
+            issues.append(
+                f"{reference} is scoped to missing source files: "
+                f"{', '.join(missing_source_subjects)}"
+            )
+        for artifact_name, members in artifacts.items():
+            missing_subjects = check_artifact_license_coverage(members, subjects)
+            if missing_subjects:
+                missing_subject_artifacts.setdefault(reference, {})[
+                    artifact_name
+                ] = missing_subjects
+                issues.append(
+                    f"{artifact_name} omits files scoped by {reference}: "
+                    f"{', '.join(missing_subjects)}"
+                )
+
     dependency_issues = validate_license_dependencies(
         deprecations, reference_map, declared
     )
@@ -236,5 +275,8 @@ def validate_compatibility(
         missing_source_files=missing_source,
         missing_artifact_files=missing_artifacts,
         dependency_issues=dependency_issues,
+        reference_subjects=reference_subjects,
+        missing_subject_source_files=missing_subject_source,
+        missing_subject_artifact_files=missing_subject_artifacts,
         issues=tuple(issues),
     )
