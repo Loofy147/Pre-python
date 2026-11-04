@@ -1,7 +1,8 @@
-"""PEP 517/621 artifact inspection and source-bound build evidence."""
+"""PEP 517/621 build-artifact inspection and source-to-wheel comparison."""
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import tarfile
 import zipfile
@@ -9,10 +10,23 @@ from dataclasses import dataclass
 from email.parser import BytesParser
 from email.policy import default
 from pathlib import Path, PurePosixPath
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from packaging.utils import canonicalize_name
 from packaging.version import Version
+
+from chipcup.licenses import check_artifact_license_coverage
+from chipcup.types import AuditReceipt
+
+__all__ = [
+    "ArtifactComparison",
+    "ArtifactInfo",
+    "BuildEvidence",
+    "accept_type_receipt",
+    "compare_artifacts",
+    "inspect_artifact",
+    "require_license_coverage",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,12 +44,39 @@ class ArtifactInfo:
     version: str
     sha256: str
     members: tuple[str, ...]
-    requires_dist: tuple[str, ...] = ()
+    requires_dist: tuple[str, ...]
+    license_expression: str | None
+    license_files: tuple[str, ...]
+    top_level_names: tuple[str, ...]
+    public_exports: Mapping[str, tuple[str, ...]]
+    build_backend: str | None = None
+    dynamic_version: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactComparison:
+    name: str
+    version: str
+    requires_dist_equal: bool
+    top_level_names_equal: bool
+    public_exports_equal: bool
+    license_metadata_equal: bool
+    build_backend: str | None
+    dynamic_version: bool
+
+    @property
+    def passed(self) -> bool:
+        return (
+            self.requires_dist_equal
+            and self.top_level_names_equal
+            and self.public_exports_equal
+            and self.license_metadata_equal
+            and self.build_backend is not None
+            and not self.dynamic_version
+        )
 
 
 def accept_type_receipt(receipt: object) -> BuildEvidence:
-    from chipcup.types import AuditReceipt
-
     if not isinstance(receipt, AuditReceipt):
         raise TypeError("build requires an AuditReceipt")
     digest = receipt.source_digest
@@ -50,7 +91,9 @@ def accept_type_receipt(receipt: object) -> BuildEvidence:
     return BuildEvidence(source_digest=digest.lower(), passed=True)
 
 
-def _metadata_info(data: bytes) -> tuple[str, str, tuple[str, ...]]:
+def _metadata_info(data: bytes) -> tuple[
+    str, str, tuple[str, ...], str | None, tuple[str, ...]
+]:
     message = BytesParser(policy=default).parsebytes(data)
     name = message.get("Name")
     version = message.get("Version")
@@ -58,34 +101,110 @@ def _metadata_info(data: bytes) -> tuple[str, str, tuple[str, ...]]:
         raise ValueError("artifact metadata must contain Name and Version")
     Version(version)
     requires_dist = tuple(sorted(message.get_all("Requires-Dist", [])))
-    return str(name), str(version), requires_dist
+    license_expression = message.get("License-Expression")
+    license_files = tuple(sorted(message.get_all("License-File", [])))
+    return str(name), str(version), requires_dist, license_expression, license_files
 
 
-def _validate_distribution_directory(
-    directory: str,
-    suffix: str,
-    name: str,
-    version: str,
-    *,
-    kind: str,
-) -> None:
-    if suffix and not directory.endswith(suffix):
-        raise ValueError(f"{kind} metadata is outside its expected distribution directory")
-    stem = directory[: -len(suffix)] if suffix else directory
+def _literal_public_names(source: bytes, path: str) -> tuple[str, ...]:
     try:
-        directory_name, directory_version = stem.rsplit("-", 1)
-    except ValueError as error:
-        raise ValueError(f"{kind} distribution directory has no name-version boundary") from error
-    if canonicalize_name(directory_name) != canonicalize_name(name):
-        raise ValueError(
-            f"{kind} directory project name {directory_name!r} "
-            f"does not match metadata name {name!r}"
-        )
-    if Version(directory_version) != Version(version):
-        raise ValueError(
-            f"{kind} directory version {directory_version!r} "
-            f"does not match metadata version {version!r}"
-        )
+        tree = ast.parse(source.decode("utf-8"), filename=path)
+    except (SyntaxError, UnicodeDecodeError):
+        return ()
+    for node in tree.body:
+        value: ast.expr | None = None
+        if isinstance(node, ast.Assign):
+            if any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
+                value = node.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id == "__all__":
+                value = node.value
+        if value is not None:
+            try:
+                result = ast.literal_eval(value)
+            except (ValueError, TypeError):
+                return ()
+            if isinstance(result, (tuple, list)) and all(isinstance(item, str) for item in result):
+                return tuple(result)
+            return ()
+    return ()
+
+
+def _package_exports(files: Mapping[str, bytes]) -> tuple[
+    tuple[str, ...], dict[str, tuple[str, ...]]
+]:
+    names: set[str] = set()
+    exports: dict[str, tuple[str, ...]] = {}
+    for path, content in files.items():
+        normalized = path.replace("\\", "/")
+        marker = "/chipcup/"
+        if marker not in f"/{normalized}" or not normalized.endswith("/__init__.py"):
+            continue
+        start = f"/{normalized}".find(marker) + len(marker)
+        package_path = f"/{normalized}"[start : -len("/__init__.py")]
+        module = "chipcup" if not package_path else "chipcup." + package_path.replace("/", ".")
+        names.add(module)
+        exports[module] = _literal_public_names(content, normalized)
+    return tuple(sorted(names)), exports
+
+
+def _parse_sdist_pyproject(files: Mapping[str, bytes]) -> tuple[str | None, bool]:
+    candidates = [
+        (path, content)
+        for path, content in files.items()
+        if path.replace("\\", "/").endswith("/pyproject.toml")
+    ]
+    if len(candidates) != 1:
+        raise ValueError("sdist must contain exactly one root pyproject.toml")
+    raw = candidates[0][1].decode("utf-8")
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib  # type: ignore[import-not-found]
+    document = tomllib.loads(raw)
+    build_system = document.get("build-system", {})
+    project = document.get("project", {})
+    backend = build_system.get("build-backend")
+    dynamic = project.get("dynamic", [])
+    if not isinstance(backend, str):
+        raise ValueError("sdist pyproject.toml must declare build-system.build-backend")
+    if not isinstance(dynamic, list):
+        raise ValueError("project.dynamic must be an array")
+    return backend, "version" in dynamic
+
+
+def _read_wheel(path: Path) -> tuple[dict[str, bytes], bytes]:
+    with zipfile.ZipFile(path) as archive:
+        members = tuple(archive.namelist())
+        files = {
+            name: archive.read(name)
+            for name in members
+            if name.startswith("chipcup/") and name.endswith(".py")
+        }
+        metadata_names = [
+            name for name in members if name.endswith(".dist-info/METADATA")
+        ]
+        if len(metadata_names) != 1:
+            raise ValueError("wheel must contain exactly one dist-info/METADATA")
+        return files, archive.read(metadata_names[0])
+
+
+def _read_sdist(path: Path) -> tuple[dict[str, bytes], bytes]:
+    with tarfile.open(path, "r:*") as archive:
+        members = archive.getmembers()
+        files: dict[str, bytes] = {}
+        for member in members:
+            if not member.isfile():
+                continue
+            stream = archive.extractfile(member)
+            if stream is not None:
+                files[member.name] = stream.read()
+        metadata_names = [
+            name for name in files if name.endswith("/PKG-INFO")
+        ]
+        if len(metadata_names) != 1:
+            raise ValueError("sdist must contain exactly one PKG-INFO")
+        return files, files[metadata_names[0]]
 
 
 def inspect_artifact(path: str | Path) -> ArtifactInfo:
@@ -95,48 +214,39 @@ def inspect_artifact(path: str | Path) -> ArtifactInfo:
     if artifact.name.endswith(".whl"):
         with zipfile.ZipFile(artifact) as archive:
             members = tuple(sorted(archive.namelist()))
-            metadata_names = [
-                name for name in members if name.endswith(".dist-info/METADATA")
-            ]
-            if len(metadata_names) != 1:
-                raise ValueError("wheel must contain exactly one dist-info/METADATA")
-            metadata_path = PurePosixPath(metadata_names[0])
-            if len(metadata_path.parts) != 2 or metadata_path.parts[1] != "METADATA":
-                raise ValueError("wheel METADATA must be directly inside its dist-info directory")
-            name, version, requires_dist = _metadata_info(archive.read(metadata_names[0]))
-            _validate_distribution_directory(
-                metadata_path.parts[0], ".dist-info", name, version, kind="wheel"
-            )
+        files, metadata = _read_wheel(artifact)
         kind = "wheel"
+        backend = None
+        dynamic_version = False
     elif artifact.name.endswith((".tar.gz", ".tar.bz2", ".tar.xz")):
         with tarfile.open(artifact, "r:*") as archive:
             members = tuple(sorted(member.name for member in archive.getmembers()))
-            metadata_members = [
-                member
-                for member in archive.getmembers()
-                if member.isfile() and member.name.endswith("/PKG-INFO")
-            ]
-            if len(metadata_members) != 1:
-                raise ValueError("sdist must contain exactly one PKG-INFO")
-            metadata_path = PurePosixPath(metadata_members[0].name)
-            if len(metadata_path.parts) != 2 or metadata_path.parts[1] != "PKG-INFO":
-                raise ValueError("sdist PKG-INFO must be at the source root")
-            stream = archive.extractfile(metadata_members[0])
-            if stream is None:
-                raise ValueError("could not read sdist PKG-INFO")
-            name, version, requires_dist = _metadata_info(stream.read())
-            _validate_distribution_directory(
-                metadata_path.parts[0], "", name, version, kind="sdist"
-            )
+        files, metadata = _read_sdist(artifact)
         kind = "sdist"
+        backend, dynamic_version = _parse_sdist_pyproject(files)
     else:
         raise ValueError(f"unsupported artifact type: {artifact.name}")
+
+    name, version, requires_dist, expression, license_files = _metadata_info(metadata)
+    package_names, public_exports = _package_exports(files)
     return ArtifactInfo(
-        artifact, kind, name, version, digest, members, requires_dist
+        path=artifact,
+        kind=kind,
+        name=name,
+        version=version,
+        sha256=digest,
+        members=members,
+        requires_dist=requires_dist,
+        license_expression=expression,
+        license_files=license_files,
+        top_level_names=package_names,
+        public_exports=public_exports,
+        build_backend=backend,
+        dynamic_version=dynamic_version,
     )
 
 
-def compare_artifacts(sdist: ArtifactInfo, wheel: ArtifactInfo) -> tuple[str, str]:
+def compare_artifacts(sdist: ArtifactInfo, wheel: ArtifactInfo) -> ArtifactComparison:
     if sdist.kind != "sdist" or wheel.kind != "wheel":
         raise ValueError("expected one sdist followed by one wheel")
     if canonicalize_name(sdist.name) != canonicalize_name(wheel.name):
@@ -145,12 +255,32 @@ def compare_artifacts(sdist: ArtifactInfo, wheel: ArtifactInfo) -> tuple[str, st
         raise ValueError("sdist and wheel versions differ")
     if sdist.requires_dist != wheel.requires_dist:
         raise ValueError("sdist and wheel Requires-Dist metadata differ")
-    return sdist.name, sdist.version
+    if sdist.top_level_names != wheel.top_level_names:
+        raise ValueError("sdist and wheel top-level package names differ")
+    if dict(sdist.public_exports) != dict(wheel.public_exports):
+        raise ValueError("sdist and wheel public __all__ surfaces differ")
+    if (
+        sdist.license_expression != wheel.license_expression
+        or sdist.license_files != wheel.license_files
+    ):
+        raise ValueError("sdist and wheel PEP 639 license metadata differs")
+    return ArtifactComparison(
+        name=sdist.name,
+        version=sdist.version,
+        requires_dist_equal=sdist.requires_dist == wheel.requires_dist,
+        top_level_names_equal=sdist.top_level_names == wheel.top_level_names,
+        public_exports_equal=dict(sdist.public_exports) == dict(wheel.public_exports),
+        license_metadata_equal=(
+            sdist.license_expression == wheel.license_expression
+            and sdist.license_files == wheel.license_files
+        ),
+        build_backend=sdist.build_backend,
+        dynamic_version=sdist.dynamic_version,
+    )
 
 
 def require_license_coverage(
-    artifact: ArtifactInfo, license_files: Iterable[str]
+    artifact: ArtifactInfo, license_files: Iterable[str] | None = None
 ) -> tuple[str, ...]:
-    from chipcup.licenses import check_artifact_license_coverage
-
-    return check_artifact_license_coverage(artifact.members, license_files)
+    declared = artifact.license_files if license_files is None else tuple(license_files)
+    return check_artifact_license_coverage(artifact.members, declared)
