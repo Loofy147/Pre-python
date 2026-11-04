@@ -58,10 +58,10 @@ The CI workflow builds an sdist, then builds the wheel **from that sdist**, vali
 The package's distribution-level PEP 639 expression is `MIT`. The fixture also has a custom alternative grant recorded in `LICENSES/Fixture-Dual.txt`, with the project-specific supplemental mapping:
 
 ```text
-LicenseRef-Fixture-Dual → LICENSES/Fixture-Dual.txt
+LicenseRef-Fixture-Dual → LICENSES/Fixture-Dual.txt → fixtures/chip.dat
 ```
 
-The validator checks the mapped text and file coverage. It does not pretend that a single distribution-level `License-Expression` assigns a different expression to an individual file. Core Metadata's `License-Expression` applies to the archive metadata that contains it; file-level scoping is not encoded by adding a `LicenseRef` to the package expression.
+The validator checks that the mapped license text is declared and shipped, and independently checks the subject file `fixtures/chip.dat` in the source tree, sdist, and wheel. It does not pretend that a single distribution-level `License-Expression` assigns a different expression to an individual file. Core Metadata's `License-Expression` applies to the archive metadata that contains it; file-level scoping is not encoded by adding a `LicenseRef` to the package expression.
 
 ## Deprecation timing
 
