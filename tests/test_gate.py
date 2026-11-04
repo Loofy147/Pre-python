@@ -9,8 +9,12 @@ def test_release_gate_reports_seven_independent_results(artifact_pair):
     root = Path(__file__).resolve().parents[1]
 
     observations = tuple(
-        WarningObservation("0.1.0", row, True, True, 1)
-        for row in ("linux", "windows", "macos")
+        WarningObservation("0.1.0", row, True, True, 1, platform)
+        for row, platform in (
+            ("linux", "linux"),
+            ("windows", "win32"),
+            ("macos", "darwin"),
+        )
     )
     report = evaluate_release(
         GateRequest(
