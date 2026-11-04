@@ -182,6 +182,10 @@ def evaluate_release(request: GateRequest) -> GateReport:
         request.deprecations,
         request.published_releases,
         request.warning_observations,
+        row_platforms={
+            row.name: row.environment.get("sys_platform", "")
+            for row in selected_rows
+        },
     )
 
     return GateReport(
