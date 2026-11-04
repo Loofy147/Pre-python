@@ -8,6 +8,7 @@ from chipcup.types import (
     Reader,
     audit_stub_sets,
     is_any,
+    load,
     prepare_build_receipt,
 )
 
@@ -49,3 +50,13 @@ def test_generic_reader_declares_covariance():
 def test_marker_matrix_stub_set_names_are_checked():
     assert audit_stub_sets(("base", "posix", "gpu")) == ()
     assert audit_stub_sets(("unknown",)) == ("unknown",)
+
+
+
+def test_marker_selection_loads_actual_stub_protocols():
+    gpu_contracts = load("gpu")
+    posix_contracts = load("posix")
+    assert {contract.__name__ for contract in gpu_contracts} == {"AuditReceipt", "Reader"}
+    assert {contract.__name__ for contract in posix_contracts} == {"PosixStubContract", "Reader"}
+    with pytest.raises(ValueError, match="unknown chipcup stub set"):
+        load("not-a-real-platform")
