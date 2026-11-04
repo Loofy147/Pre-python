@@ -53,7 +53,7 @@ class MarkerMatrixResult:
 
     @property
     def passed(self) -> bool:
-        return bool(self.evaluations)
+        return bool(self.evaluations) and bool(self.selected_stub_sets)
 
 
 @dataclass(frozen=True, slots=True)
