@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping, Sequence, cast
 
-from packaging.markers import Environment, Marker, default_environment
+from packaging.markers import Marker, default_environment
 
 from chipcup.types import AuditReceipt, accepts_protocol
 
@@ -65,13 +65,13 @@ class MarkerPolicy:
         Marker(self.expression)
 
     def evaluate(self, environment: Mapping[str, str] | None = None) -> bool:
-        base: dict[str, str] = dict(default_environment())
+        base: dict[str, str] = dict(cast(Mapping[str, str], default_environment()))
         if environment:
             base.update(environment)
         selected_extras = self.extras or ("",)
         marker = Marker(self.expression)
         return any(
-            marker.evaluate(cast(Environment, {**base, "extra": extra}))
+            marker.evaluate({**base, "extra": extra})
             for extra in selected_extras
         )
 
