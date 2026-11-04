@@ -58,11 +58,13 @@ def test_sdist_root_identity_must_match_pkg_info(tmp_path: Path):
 def test_dynamic_version_with_matching_literal_hook_is_reproducible(artifact_pair, tmp_path):
     sdist, wheel = artifact_pair
     dynamic_sdist = tmp_path / "chipcup-0.1.0.tar.gz"
-    with tarfile.open(sdist, "r:gz") as source, tarfile.open(dynamic_sdist, "w:gz") as output:
+    rewritten_members: list[tuple[str, bytes]] = []
+    with tarfile.open(sdist, "r:gz") as source:
         for member in source.getmembers():
+            if not member.isfile():
+                continue
             stream = source.extractfile(member)
             if stream is None:
-                output.addfile(member)
                 continue
             data = stream.read()
             if member.name.endswith("/pyproject.toml"):
@@ -70,11 +72,13 @@ def test_dynamic_version_with_matching_literal_hook_is_reproducible(artifact_pai
                     b'version = "0.1.0"\ndynamic = []',
                     b'dynamic = ["version"]\n\n[tool.setuptools.dynamic]\nversion = { attr = "chipcup.__version__" }',
                 )
-                info = tarfile.TarInfo(member.name)
-                info.size = len(data)
-                output.addfile(info, BytesIO(data))
-            else:
-                output.addfile(member, BytesIO(data))
+            rewritten_members.append((member.name, data))
+
+    with tarfile.open(dynamic_sdist, "w:gz") as output:
+        for name, data in rewritten_members:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            output.addfile(info, BytesIO(data))
     result = compare_artifacts(
         inspect_artifact(dynamic_sdist),
         inspect_artifact(wheel),
