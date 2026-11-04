@@ -66,7 +66,10 @@ def test_dynamic_version_metadata_is_not_accepted_as_reproducible(artifact_pair,
                 continue
             data = stream.read()
             if member.name.endswith("/pyproject.toml"):
-                data = data.replace(b'dynamic = []', b'dynamic = ["version"]')
+                data = data.replace(
+                    b'version = "0.1.0"\ndynamic = []',
+                    b'dynamic = ["version"]\n\n[tool.setuptools.dynamic]\nversion = { attr = "chipcup.__version__" }',
+                )
                 info = tarfile.TarInfo(member.name)
                 info.size = len(data)
                 output.addfile(info, BytesIO(data))
@@ -77,4 +80,6 @@ def test_dynamic_version_metadata_is_not_accepted_as_reproducible(artifact_pair,
         inspect_artifact(wheel),
     )
     assert result.dynamic_version
-    assert not result.passed
+    assert result.version_hook == "attr:chipcup.__version__"
+    assert result.version_hook_deterministic
+    assert result.passed
