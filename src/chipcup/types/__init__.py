@@ -120,9 +120,10 @@ def audit_public_surface(
         unknown_stub_sets=audit_stub_sets(selected_stub_sets),
         typed_public_names=typed_names,
         missing_wheel_exports=missing,
-        # mypy checks the generic declaration in CI; the runtime test checks
-        # Reader.__parameters__[0].__covariant__ independently.
-        reader_is_covariant=True,
+        reader_is_covariant=(
+            bool(Reader.__parameters__)
+            and bool(Reader.__parameters__[0].__covariant__)
+        ),
     )
 
 
