@@ -37,9 +37,7 @@ def __getattr__(name: str) -> object:
     target = _EXPORTS.get(name)
     if target is not None:
         module = import_module(target[0])
-        value = getattr(module, target[1])
-        globals()[name] = value
-        return value
+        return getattr(module, target[1])
     if name == "legacy_parse_version":
         from chipcup.deprecations import warn_deprecated
 
