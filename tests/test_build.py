@@ -1,81 +1,80 @@
+from __future__ import annotations
+
 import tarfile
 import zipfile
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 
 from chipcup.build import compare_artifacts, inspect_artifact
 
-METADATA = (
-    b"Metadata-Version: 2.4\n"
-    b"Name: chipcup\n"
-    b"Version: 0.1.0\n"
-    b"License-Expression: MIT\n"
-    b"Requires-Dist: packaging>=24.2\n"
-    b"\n"
-)
+
+def test_realistic_sdist_and_wheel_are_consistent(artifact_pair):
+    sdist, wheel = artifact_pair
+    source = inspect_artifact(sdist)
+    binary = inspect_artifact(wheel)
+
+    comparison = compare_artifacts(source, binary)
+
+    assert comparison.passed
+    assert comparison.name == "chipcup"
+    assert comparison.version == "0.1.0"
+    assert comparison.build_backend == "setuptools.build_meta"
+    assert comparison.requires_dist_equal
+    assert comparison.top_level_names_equal
+    assert comparison.public_exports_equal
+    assert comparison.license_metadata_equal
+    assert "chipcup" in source.top_level_names
+    assert source.public_exports["chipcup"] == binary.public_exports["chipcup"]
 
 
-def _write_sdist(path, metadata=METADATA, project_root="chipcup-0.1.0"):
+def test_wheel_directory_identity_must_match_core_metadata(tmp_path: Path):
+    path = tmp_path / "wrong-0.1.0-py3-none-any.whl"
+    metadata = (
+        b"Metadata-Version: 2.4\nName: different-name\nVersion: 0.1.0\n\n"
+    )
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("wrong-0.1.0.dist-info/METADATA", metadata)
+    with pytest.raises(ValueError, match="directory name"):
+        inspect_artifact(path)
+
+
+def test_sdist_root_identity_must_match_pkg_info(tmp_path: Path):
+    path = tmp_path / "chipcup-0.1.0.tar.gz"
+    metadata = b"Metadata-Version: 2.4\nName: chipcup\nVersion: 0.1.0\n\n"
     with tarfile.open(path, "w:gz") as archive:
         for name, content in (
-            (f"{project_root}/PKG-INFO", metadata),
-            (f"{project_root}/LICENSE", b"MIT"),
+            ("different-0.1.0/PKG-INFO", metadata),
+            ("different-0.1.0/pyproject.toml", b"[build-system]\nbuild-backend='setuptools.build_meta'\n"),
         ):
             info = tarfile.TarInfo(name)
             info.size = len(content)
             archive.addfile(info, BytesIO(content))
+    with pytest.raises(ValueError, match="directory name"):
+        inspect_artifact(path)
 
 
-def _write_wheel(path, metadata=METADATA, dist_info="chipcup-0.1.0.dist-info"):
-    with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr(f"{dist_info}/METADATA", metadata)
-        archive.writestr(f"{dist_info}/licenses/LICENSE", "MIT")
-
-
-def test_inspect_and_compare_wheel_and_sdist(tmp_path):
-    wheel = tmp_path / "chipcup-0.1.0-py3-none-any.whl"
-    _write_wheel(wheel)
-    sdist = tmp_path / "chipcup-0.1.0.tar.gz"
-    _write_sdist(sdist)
-
-    sdist_info = inspect_artifact(sdist)
-    wheel_info = inspect_artifact(wheel)
-    assert compare_artifacts(sdist_info, wheel_info) == ("chipcup", "0.1.0")
-    assert sdist_info.kind == "sdist"
-    assert wheel_info.kind == "wheel"
-    assert sdist_info.requires_dist == ("packaging>=24.2",)
-
-
-def test_artifact_identity_mismatch_is_rejected(tmp_path):
-    artifact = tmp_path / "wrong.whl"
-    metadata = (
-        b"Metadata-Version: 2.4\n"
-        b"Name: other\n"
-        b"Version: 1\n"
-        b"\n"
+def test_dynamic_version_metadata_is_not_accepted_as_reproducible(artifact_pair, tmp_path):
+    sdist, wheel = artifact_pair
+    dynamic_sdist = tmp_path / "chipcup-0.1.0.tar.gz"
+    with tarfile.open(sdist, "r:gz") as source, tarfile.open(dynamic_sdist, "w:gz") as output:
+        for member in source.getmembers():
+            stream = source.extractfile(member)
+            if stream is None:
+                output.addfile(member)
+                continue
+            data = stream.read()
+            if member.name.endswith("/pyproject.toml"):
+                data = data.replace(b'dynamic = []', b'dynamic = ["version"]')
+                info = tarfile.TarInfo(member.name)
+                info.size = len(data)
+                output.addfile(info, BytesIO(data))
+            else:
+                output.addfile(member, BytesIO(data))
+    result = compare_artifacts(
+        inspect_artifact(dynamic_sdist),
+        inspect_artifact(wheel),
     )
-    _write_wheel(artifact, metadata=metadata, dist_info="wrong-1.dist-info")
-    with pytest.raises(ValueError, match="directory project name"):
-        inspect_artifact(artifact)
-
-
-def test_sdist_root_must_match_metadata_identity(tmp_path):
-    artifact = tmp_path / "chipcup-0.1.0.tar.gz"
-    _write_sdist(artifact, project_root="other-1")
-    with pytest.raises(ValueError, match="directory project name"):
-        inspect_artifact(artifact)
-
-
-def test_sdist_and_wheel_requires_dist_must_match(tmp_path):
-    sdist = tmp_path / "chipcup-0.1.0.tar.gz"
-    wheel = tmp_path / "chipcup-0.1.0-py3-none-any.whl"
-    wheel_metadata = METADATA.replace(
-        b"Requires-Dist: packaging>=24.2",
-        b"Requires-Dist: packaging>=25",
-    )
-    _write_sdist(sdist)
-    _write_wheel(wheel, metadata=wheel_metadata)
-
-    with pytest.raises(ValueError, match="Requires-Dist"):
-        compare_artifacts(inspect_artifact(sdist), inspect_artifact(wheel))
+    assert result.dynamic_version
+    assert not result.passed
