@@ -23,8 +23,11 @@ python -m chipcup.cli \
   --sdist dist/chipcup-0.1.0.tar.gz \
   --wheel dist/chipcup-0.1.0-py3-none-any.whl \
   --matrix fixtures/audit-matrix.json \
+  --warning-evidence warning-evidence/ \
   --project-root .
 ```
+
+The `--warning-evidence` directory contains one JSON observation captured by each native platform job. It is required: marker simulations alone do not prove that a `DeprecationWarning` was emitted on a real target. The platform collector is `scripts/capture_warning_evidence.py`.
 
 The installed command is `chipcup.audit`. It returns exit code **0** when all boundaries pass, **1** when the audit fails or cannot establish a required contract, and **3** when a required module cannot be imported.
 
