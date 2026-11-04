@@ -43,7 +43,11 @@ class DeprecationSchedule:
     def __post_init__(self) -> None:
         if self.soft and self.removal_release is not None:
             raise ValueError("soft deprecations cannot schedule automatic removal")
-        if not self.soft and self.removal_release is not None and not self.required_matrix_rows:
+        if (
+            not self.soft
+            and self.removal_release is not None
+            and not self.required_matrix_rows
+        ):
             raise ValueError("a hard removal schedule must name its required marker rows")
 
 
@@ -117,15 +121,13 @@ def validate_schedules(
     published_releases: Sequence[str],
     observations: Sequence[WarningObservation],
 ) -> DeprecationAuditResult:
-    """Validate removal windows from emitted-warning evidence, not declarations."""
+    """Derive effective starts from warning emission on every required row."""
     effective: dict[str, str] = {}
     missing_rows: dict[str, tuple[str, ...]] = {}
     issues: list[str] = []
 
     for schedule in schedules:
         if schedule.soft:
-            continue
-        if schedule.removal_release is None:
             continue
 
         by_row: dict[str, Version] = {}
@@ -151,11 +153,14 @@ def validate_schedules(
             )
             continue
 
-        # The global window starts only after every required supported row has
-        # observed the warning; use the latest of their first-observed releases.
+        # A public API's global clock starts after all required supported rows
+        # have actually emitted the warning, not merely after a version shipped.
         start = max(by_row.values())
-        removal = Version(schedule.removal_release)
         effective[schedule.public_name] = str(start)
+        if schedule.removal_release is None:
+            continue
+
+        removal = Version(schedule.removal_release)
         if removal <= start:
             issues.append(
                 f"{schedule.public_name}: removal release must follow "
