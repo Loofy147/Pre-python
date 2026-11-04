@@ -24,7 +24,7 @@ __all__ = [
 ]
 
 _TOKEN = re.compile(
-    r"\\s*(\\(|\\)|AND\\b|OR\\b|WITH\\b|[A-Za-z0-9][A-Za-z0-9.+:-]*)",
+    r"\s*(\(|\)|AND\b|OR\b|WITH\b|[A-Za-z0-9][A-Za-z0-9.+:-]*)",
     re.IGNORECASE,
 )
 _LICENSE_REF_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]*$")
@@ -142,8 +142,8 @@ def license_references(node: LicenseNode) -> tuple[str, ...]:
 
 
 def _covered(member: str, requested: str) -> bool:
-    normalized = member.replace("\\\\", "/").lstrip("./")
-    target = requested.replace("\\\\", "/").lstrip("./")
+    normalized = member.replace("\\", "/").lstrip("./")
+    target = requested.replace("\\", "/").lstrip("./")
     basename = Path(target).name
     return (
         normalized == target
