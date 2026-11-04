@@ -54,15 +54,22 @@ def test_release_gate_reports_seven_independent_results(artifact_pair):
 
 
 def test_release_gate_exposes_individual_failure_algebras(artifact_pair):
-    from dataclasses import replace
-
     sdist, wheel = artifact_pair
     root = Path(__file__).resolve().parents[1]
+    observations = tuple(
+        WarningObservation("0.1.0", row, True, True, 1, platform)
+        for row, platform in (
+            ("linux", "linux"),
+            ("windows", "win32"),
+            ("macos", "darwin"),
+        )
+    )
     request = GateRequest(
         sdist_path=sdist,
         wheel_path=wheel,
         project_root=root,
         version_specifier=">=9.0",
+        warning_observations=observations,
     )
 
     report = evaluate_release(request)
