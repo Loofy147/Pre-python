@@ -6,11 +6,11 @@ import importlib
 from dataclasses import asdict, dataclass, field
 from importlib.metadata import version as installed_distribution_version
 from pathlib import Path
-from typing import Mapping, Sequence
+from types import ModuleType
+from typing import Mapping
 
 from chipcup.build import (
     ArtifactComparison,
-    ArtifactInfo,
     compare_artifacts,
     inspect_artifact,
 )
@@ -49,7 +49,27 @@ class GateRequest:
     project_root: Path = Path(".")
     package_name: str = "chipcup"
     version_specifier: str = ">=0.1.0,<1.0.0"
-    marker_rows: tuple[MarkerRow, ...] = ()
+    marker_rows: tuple[MarkerRow, ...] = (
+        MarkerRow(
+            "linux",
+            "sys_platform == 'linux'",
+            "posix",
+            environment={"sys_platform": "linux"},
+        ),
+        MarkerRow(
+            "windows",
+            "sys_platform == 'win32'",
+            "windows",
+            environment={"sys_platform": "win32"},
+        ),
+        MarkerRow(
+            "macos",
+            "sys_platform == 'darwin'",
+            "posix",
+            environment={"sys_platform": "darwin"},
+        ),
+        MarkerRow("gpu-extra", 'extra == "gpu"', "gpu", extra="gpu"),
+    )
     environment: Mapping[str, str] = field(default_factory=dict)
     license_refs: Mapping[str, str] = field(
         default_factory=lambda: dict(DEFAULT_LICENSE_REFS)
@@ -104,7 +124,7 @@ class GateReport:
         }
 
 
-def _audit_modules(package_name: str) -> Mapping[str, object]:
+def _audit_modules(package_name: str) -> Mapping[str, ModuleType]:
     names = (
         package_name,
         f"{package_name}.imports",
@@ -118,12 +138,8 @@ def _audit_modules(package_name: str) -> Mapping[str, object]:
     return {name: importlib.import_module(name) for name in names}
 
 
-def _typed_modules(package_name: str) -> Mapping[str, object]:
-    return _audit_modules(package_name)
-
-
 def _observe_deprecations(
-    package_module: object,
+    package_module: ModuleType,
     release: str,
     matrix_result: MarkerMatrixResult,
 ) -> tuple[WarningObservation, ...]:
@@ -159,12 +175,12 @@ def evaluate_release(request: GateRequest) -> GateReport:
         selected_rows, environment=request.environment
     )
 
-    # Inspect both artifacts before the type verdict so the typed source API
-    # can be compared with the actual wheel export surface.
+    # The type verdict consumes the actual wheel's exported surface. Artifact
+    # inspection is performed here as evidence collection; the build verdict
+    # itself follows the typed-surface check.
     sdist = inspect_artifact(request.sdist_path)
     wheel = inspect_artifact(request.wheel_path)
-
-    modules = _typed_modules(request.package_name)
+    modules = _audit_modules(request.package_name)
     type_result = audit_public_surface(
         modules, wheel.public_exports, marker_result.selected_stub_sets
     )
