@@ -18,7 +18,6 @@ from chipcup.deprecations import (
     DeprecationAuditResult,
     DeprecationSchedule,
     WarningObservation,
-    capture_warning_observation,
     validate_schedules,
 )
 from chipcup.imports import ImportAudit, audit_module
@@ -138,24 +137,6 @@ def _audit_modules(package_name: str) -> Mapping[str, ModuleType]:
     return {name: importlib.import_module(name) for name in names}
 
 
-def _observe_deprecations(
-    package_module: ModuleType,
-    release: str,
-    matrix_result: MarkerMatrixResult,
-) -> tuple[WarningObservation, ...]:
-    observations: list[WarningObservation] = []
-    for evaluation in matrix_result.evaluations:
-        observations.append(
-            capture_warning_observation(
-                release,
-                evaluation.row,
-                evaluation.result,
-                lambda: getattr(package_module, "legacy_parse_version"),
-            )
-        )
-    return tuple(observations)
-
-
 def evaluate_release(request: GateRequest) -> GateReport:
     """Run each formal-system audit and preserve its own result structure."""
     import_result = audit_module(request.package_name)
@@ -197,13 +178,10 @@ def evaluate_release(request: GateRequest) -> GateReport:
         deprecations=request.deprecations,
     )
 
-    observations = request.warning_observations or _observe_deprecations(
-        package_module, str(version_result.imported), marker_result
-    )
     deprecation_result = validate_schedules(
         request.deprecations,
         request.published_releases,
-        observations,
+        request.warning_observations,
     )
 
     return GateReport(
