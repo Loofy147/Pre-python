@@ -5,12 +5,12 @@ import chipcup
 from chipcup.imports import audit_module, discover_compatible_entry_points, load_module
 
 
-def test_root_exports_are_lazy_and_resolve(monkeypatch):
-    monkeypatch.delattr(chipcup, "parse_version", raising=False)
+def test_root_exports_are_lazy_and_resolve():
     assert "parse_version" not in chipcup.__dict__
-    assert str(chipcup.parse_version("1.2rc1")) == "1.2rc1"
+    resolved = chipcup.parse_version
+    assert str(resolved("1.2rc1")) == "1.2rc1"
     assert "parse_version" not in chipcup.__dict__
-    assert chipcup.parse_version is chipcup.parse_version
+    assert resolved is chipcup.parse_version
 
 
 def test_module_identity_is_first_import_wins():
