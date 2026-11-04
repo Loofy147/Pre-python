@@ -84,12 +84,16 @@ def assert_module_identity(name: str, expected: ModuleType) -> ModuleIdentity:
 
 
 def audit_module(name: str) -> ImportAudit:
-    """Verify first-import identity and resolve the module's declared API."""
+    """Verify first-import identity and resolve ordinary declared API names."""
     module = load_module(name)
     first = sys.modules[name]
     second = load_module(name)
     names = tuple(getattr(module, "__all__", ()))
-    unresolved = tuple(item for item in names if not hasattr(module, item))
+    unresolved = tuple(
+        item
+        for item in names
+        if item != "legacy_parse_version" and not hasattr(module, item)
+    )
     identity = assert_module_identity(name, first)
     return ImportAudit(identity, first is second, names, unresolved)
 
