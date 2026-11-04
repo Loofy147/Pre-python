@@ -87,3 +87,34 @@ def test_dynamic_version_with_matching_literal_hook_is_reproducible(artifact_pai
     assert result.version_hook == "attr:chipcup.__version__"
     assert result.version_hook_deterministic
     assert result.passed
+
+
+
+def test_nested_egg_info_pkg_info_does_not_shadow_root_metadata(
+    artifact_pair, tmp_path: Path
+):
+    sdist, _ = artifact_pair
+    candidate = tmp_path / "nested-pkg-info.tar.gz"
+    with tarfile.open(sdist, "r:gz") as source:
+        files: list[tuple[str, bytes]] = []
+        for member in source.getmembers():
+            if not member.isfile():
+                continue
+            stream = source.extractfile(member)
+            if stream is not None:
+                files.append((member.name, stream.read()))
+    files.append(
+        (
+            "chipcup-0.1.0/src/chipcup.egg-info/PKG-INFO",
+            b"Metadata-Version: 2.4\\nName: wrong\\nVersion: 9.9\\n\\n",
+        )
+    )
+    with tarfile.open(candidate, "w:gz") as output:
+        for name, data in files:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            output.addfile(info, BytesIO(data))
+
+    artifact = inspect_artifact(candidate)
+    assert artifact.name == "chipcup"
+    assert artifact.version == "0.1.0"
