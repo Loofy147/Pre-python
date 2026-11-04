@@ -1,5 +1,7 @@
 # Architecture and evidence boundaries
 
+See [DESIGN_RATIONALE.md](DESIGN_RATIONALE.md) for the motivating boundary scene, the counterfactual origin story, reducibility analysis, and current falsification targets.
+
 ## Purpose
 
 chipcup audits a distribution's public-API lifecycle. Each subpackage has a distinct evaluator and a concrete responsibility. The report preserves seven independent result records; the Boolean `GateReport.passed` is only a release-gate convenience.
