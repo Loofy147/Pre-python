@@ -149,6 +149,12 @@ def validate_schedules(
                     f"unpublished release {observation.release}"
                 )
                 continue
+            if row_platforms is not None and observation.matrix_row not in row_platforms:
+                issues.append(
+                    f"{schedule.public_name}: row {observation.matrix_row} "
+                    "was not selected by the current version matrix"
+                )
+                continue
             expected_platform = (
                 row_platforms.get(observation.matrix_row)
                 if row_platforms is not None
