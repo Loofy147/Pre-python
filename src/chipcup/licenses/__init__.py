@@ -189,11 +189,14 @@ def validate_compatibility(
 ) -> LicenseAuditResult:
     """Validate SPDX syntax, LicenseRef mapping and file coverage per artifact."""
     tree = parse_license_expression(expression)
-    refs = license_references(tree)
+    expression_refs = license_references(tree)
     reference_map = dict(DEFAULT_LICENSE_REFS if license_refs is None else license_refs)
+    # Supplemental refs describe file-scoped grants that PEP 639's single
+    # distribution-level License-Expression cannot scope to individual files.
+    refs = tuple(sorted(set(expression_refs) | set(reference_map)))
     issues: list[str] = []
 
-    unresolved = tuple(reference for reference in refs if reference not in reference_map)
+    unresolved = tuple(reference for reference in expression_refs if reference not in reference_map)
     if unresolved:
         issues.append(f"unmapped SPDX LicenseRef identifiers: {', '.join(unresolved)}")
 
