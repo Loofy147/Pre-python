@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from chipcup.deprecations import WarningObservation
 from chipcup.gate import GateRequest, evaluate_release
 
 
@@ -7,11 +8,16 @@ def test_release_gate_reports_seven_independent_results(artifact_pair):
     sdist, wheel = artifact_pair
     root = Path(__file__).resolve().parents[1]
 
+    observations = tuple(
+        WarningObservation("0.1.0", row, True, True, 1)
+        for row in ("linux", "windows", "macos")
+    )
     report = evaluate_release(
         GateRequest(
             sdist_path=sdist,
             wheel_path=wheel,
             project_root=root,
+            warning_observations=observations,
         )
     )
 
