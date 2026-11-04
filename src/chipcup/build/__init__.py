@@ -152,7 +152,9 @@ def _package_exports(files: Mapping[str, bytes]) -> tuple[
     return tuple(sorted(names)), exports
 
 
-def _parse_sdist_pyproject(files: Mapping[str, bytes]) -> tuple[str | None, bool, str | None]:
+def _parse_sdist_pyproject(
+    files: Mapping[str, bytes],
+) -> tuple[str | None, bool, str | None, str | None]:
     candidates = [
         (path, content)
         for path, content in files.items()
@@ -337,8 +339,9 @@ def inspect_artifact(path: str | Path) -> ArtifactInfo:
                 raise ValueError("static pyproject.toml version differs from artifact metadata version")
             version_hook_deterministic = True
         else:
-            version_hook_deterministic = _verify_version_hook(
-                files, version_hook, version
+            version_hook_deterministic = (
+                backend in {"setuptools.build_meta", "setuptools.build_meta:__legacy__"}
+                and _verify_version_hook(files, version_hook, version)
             )
     package_names, public_exports = _package_exports(files)
     return ArtifactInfo(
