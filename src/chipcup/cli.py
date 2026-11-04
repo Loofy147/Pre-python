@@ -70,6 +70,7 @@ def load_warning_observations(path: Path) -> tuple[WarningObservation, ...]:
             record = cast(Mapping[str, object], raw)
             release = _string(record, 'release')
             row = _string(record, 'matrix_row')
+            platform = _string(record, 'platform')
             selected = record.get('marker_selected')
             emitted = record.get('emitted')
             count = record.get('warning_count')
@@ -77,7 +78,7 @@ def load_warning_observations(path: Path) -> tuple[WarningObservation, ...]:
                 raise ValueError('warning evidence selection and emission fields must be Boolean')
             if not isinstance(count, int) or count < 0:
                 raise ValueError('warning_count must be a non-negative integer')
-            observations.append(WarningObservation(release, row, selected, emitted, count))
+            observations.append(WarningObservation(release, row, selected, emitted, count, platform))
     return tuple(observations)
 
 def _parser() -> argparse.ArgumentParser:
