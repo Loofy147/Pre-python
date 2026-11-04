@@ -5,6 +5,7 @@ import pytest
 from chipcup.deprecations import DeprecationSchedule
 from chipcup.licenses import (
     DEFAULT_LICENSE_REFS,
+    DEFAULT_LICENSE_REF_SUBJECTS,
     license_references,
     parse_license_expression,
     validate_compatibility,
@@ -35,6 +36,9 @@ def test_custom_license_ref_needs_declared_text_file(tmp_path: Path):
     dual = tmp_path / "LICENSES" / "Fixture-Dual.txt"
     dual.parent.mkdir()
     dual.write_text("fixture is MIT OR Apache-2.0", encoding="utf-8")
+    fixture = tmp_path / "fixtures" / "chip.dat"
+    fixture.parent.mkdir()
+    fixture.write_bytes(b"CHIPCUP_FIXTURE_V1\\n")
 
     result = validate_compatibility(
         "MIT",
@@ -43,18 +47,23 @@ def test_custom_license_ref_needs_declared_text_file(tmp_path: Path):
                 "chipcup-0.1.0/PKG-INFO",
                 "chipcup-0.1.0/LICENSE",
                 "chipcup-0.1.0/LICENSES/Fixture-Dual.txt",
+                "chipcup-0.1.0/fixtures/chip.dat",
             ),
             "wheel": (
                 "chipcup-0.1.0.dist-info/METADATA",
                 "chipcup-0.1.0.dist-info/licenses/LICENSE",
                 "chipcup-0.1.0.dist-info/licenses/Fixture-Dual.txt",
+                "chipcup/fixtures/chip.dat",
             ),
         },
         ("LICENSE", "LICENSES/Fixture-Dual.txt"),
         root=tmp_path,
         license_refs=DEFAULT_LICENSE_REFS,
+        license_ref_subjects=DEFAULT_LICENSE_REF_SUBJECTS,
     )
     assert result.passed
+    assert result.reference_subjects["LicenseRef-Fixture-Dual"] == ("fixtures/chip.dat",)
+    assert not result.missing_subject_artifact_files
     assert result.references == ("LicenseRef-Fixture-Dual",)
 
 
