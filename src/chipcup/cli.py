@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Mapping, Sequence, cast
 
+from chipcup.deprecations import WarningObservation
 from chipcup.gate import GateRequest, evaluate_release
 from chipcup.markers import MarkerRow
 
@@ -57,6 +58,28 @@ def load_matrix(path: Path) -> tuple[MarkerRow, ...]:
     return tuple(rows)
 
 
+def load_warning_observations(path: Path) -> tuple[WarningObservation, ...]:
+    files = sorted(path.glob('*.json')) if path.is_dir() else [path]
+    observations: list[WarningObservation] = []
+    for item in files:
+        decoded: object = json.loads(item.read_text(encoding='utf-8'))
+        values = decoded if isinstance(decoded, list) else [decoded]
+        for raw in cast(list[object], values):
+            if not isinstance(raw, dict):
+                raise ValueError(f'warning evidence in {item} must contain JSON objects')
+            record = cast(Mapping[str, object], raw)
+            release = _string(record, 'release')
+            row = _string(record, 'matrix_row')
+            selected = record.get('marker_selected')
+            emitted = record.get('emitted')
+            count = record.get('warning_count')
+            if not isinstance(selected, bool) or not isinstance(emitted, bool):
+                raise ValueError('warning evidence selection and emission fields must be Boolean')
+            if not isinstance(count, int) or count < 0:
+                raise ValueError('warning_count must be a non-negative integer')
+            observations.append(WarningObservation(release, row, selected, emitted, count))
+    return tuple(observations)
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="chipcup.audit",
@@ -66,6 +89,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--wheel", type=Path, required=True)
     parser.add_argument("--matrix", type=Path, default=Path("fixtures/audit-matrix.json"))
     parser.add_argument("--project-root", type=Path, default=Path("."))
+    parser.add_argument("--warning-evidence", type=Path, required=True, help="JSON file or directory of native-platform warning observations")
     parser.add_argument(
         "--version-specifier", default=">=0.1.0,<1.0.0",
         help="PEP 440 specifier required for the installed distribution",
@@ -84,6 +108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 project_root=args.project_root,
                 version_specifier=args.version_specifier,
                 marker_rows=rows,
+                warning_observations=load_warning_observations(args.warning_evidence),
             )
         )
     except ModuleNotFoundError as error:
