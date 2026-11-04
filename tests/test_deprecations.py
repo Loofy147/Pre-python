@@ -36,6 +36,7 @@ def test_warning_capture_records_an_actually_emitted_warning():
     assert observation.marker_selected
     assert observation.emitted
     assert observation.warning_count == 1
+    assert observation.platform
 
 
 def test_removal_window_begins_after_every_required_row_emits():
@@ -107,3 +108,41 @@ def test_soft_deprecation_has_no_automatic_removal():
 def test_soft_deprecation_cannot_declare_a_removal_release():
     with pytest.raises(ValueError, match="soft deprecations"):
         DeprecationSchedule("soft_api", "2.0", soft=True)
+
+
+
+def test_warning_from_a_different_platform_does_not_start_the_required_row():
+    schedule = DeprecationSchedule(
+        "old_api",
+        removal_release="1.5",
+        required_matrix_rows=("windows",),
+    )
+    observation = WarningObservation("1.2", "windows", True, True, 1, "linux")
+
+    result = validate_schedules(
+        (schedule,),
+        ("1.0", "1.2", "1.3", "1.4", "1.5"),
+        (observation,),
+        row_platforms={"windows": "win32"},
+    )
+
+    assert not result.passed
+    assert "windows" in result.missing_warning_rows["old_api"]
+    assert any("requires native platform win32" in issue for issue in result.issues)
+
+
+def test_observation_for_unpublished_version_is_rejected():
+    schedule = DeprecationSchedule(
+        "old_api",
+        removal_release=None,
+        required_matrix_rows=("linux",),
+    )
+    observation = WarningObservation("9.9", "linux", True, True, 1, "linux")
+    result = validate_schedules(
+        (schedule,),
+        ("1.0", "1.1"),
+        (observation,),
+        row_platforms={"linux": "linux"},
+    )
+    assert not result.passed
+    assert "unpublished release 9.9" in " ".join(result.issues)
