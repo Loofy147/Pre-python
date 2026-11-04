@@ -38,7 +38,7 @@ class WarningObservation:
 class DeprecationSchedule:
     public_name: str
     removal_release: str | None
-    required_matrix_rows: tuple[str, ...]
+    required_matrix_rows: tuple[str, ...] = ()
     required_license_refs: tuple[str, ...] = ()
     soft: bool = False
 
