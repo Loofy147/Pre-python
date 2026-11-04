@@ -1,14 +1,16 @@
 # Changelog
 
-## 0.1.0 — 2026-11-04
+## Unreleased
 
-Initial alpha distribution.
+- Replaced the first gate's flattened pass/fail sequence with a multi-sorted result record retaining all seven boundary results.
+- Made the imports → versions → markers → types → build → licenses → deprecations dependencies explicit.
+- Added the real PEP 562 lazy types-to-build edge and moved workflow composition to the `chipcup.audit` console entry point.
+- Added PEP 440 version-row selection, PEP 508 marker logs, selected protocol sets, and wheel public-export comparison.
+- Added sdist/wheel metadata and package-surface consistency checks; CI now builds the wheel from the sdist.
+- Added the fixture file and a supplemental LicenseRef text mapping. The distribution-level License-Expression remains MIT rather than implying per-file scoping.
+- Changed removal-window validation to require actual DeprecationWarning observations on all required selected marker rows.
+- Added native platform CI coverage and coded type-ignore enforcement.
 
-- Added seven executable subpackages for Python packaging boundaries.
-- Added a fail-closed release gate that coordinates all seven systems.
-- Added a PEP 420 plugin namespace and PEP 562 lazy root exports.
-- Added PEP 440 and PEP 508 helpers backed by the packaging library.
-- Added structural typing receipts, artifact inspection, SPDX-expression syntax parsing, license-file coverage, and PEP 387 schedule validation.
-- Added isolated build and multi-version CI workflows.
+## 0.1.0 — Initial alpha metadata
 
-This release is an initial public implementation. API stability and complete SPDX identifier-list validation are not claimed.
+The initial alpha package included seven experimental subpackages and a release-gate prototype. No GitHub Release or package-index publication is asserted by this changelog entry.
