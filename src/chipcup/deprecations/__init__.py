@@ -6,6 +6,7 @@ composes the audit in a fresh process and is the cycle-closing boundary.
 
 from __future__ import annotations
 
+import sys
 import warnings
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence
@@ -30,6 +31,7 @@ class WarningObservation:
     marker_selected: bool
     emitted: bool
     warning_count: int
+    platform: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,17 +83,20 @@ def capture_warning_observation(
     matrix_row: str,
     marker_selected: bool,
     invoke: Callable[[], object],
+    *,
+    platform: str | None = None,
 ) -> WarningObservation:
     """Record an actual warning only when the marker row selected the API."""
+    observed_platform = platform or sys.platform
     if not marker_selected:
-        return WarningObservation(release, matrix_row, False, False, 0)
+        return WarningObservation(release, matrix_row, False, False, 0, observed_platform)
     with warnings.catch_warnings(record=True) as recorded:
         warnings.simplefilter("always", DeprecationWarning)
         invoke()
     count = sum(
         1 for item in recorded if issubclass(item.category, DeprecationWarning)
     )
-    return WarningObservation(release, matrix_row, True, count > 0, count)
+    return WarningObservation(release, matrix_row, True, count > 0, count, observed_platform)
 
 
 def validate_license_dependencies(
@@ -120,11 +125,14 @@ def validate_schedules(
     schedules: Sequence[DeprecationSchedule],
     published_releases: Sequence[str],
     observations: Sequence[WarningObservation],
+    *,
+    row_platforms: Mapping[str, str] | None = None,
 ) -> DeprecationAuditResult:
-    """Derive effective starts from warning emission on every required row."""
+    """Derive starts only from published warning evidence on matching native rows."""
     effective: dict[str, str] = {}
     missing_rows: dict[str, tuple[str, ...]] = {}
     issues: list[str] = []
+    published = {Version(item) for item in published_releases}
 
     for schedule in schedules:
         if schedule.soft:
@@ -132,12 +140,28 @@ def validate_schedules(
 
         by_row: dict[str, Version] = {}
         for observation in observations:
-            if (
-                observation.matrix_row in schedule.required_matrix_rows
-                and observation.marker_selected
-                and observation.emitted
-            ):
-                release = Version(observation.release)
+            if observation.matrix_row not in schedule.required_matrix_rows:
+                continue
+            release = Version(observation.release)
+            if release not in published:
+                issues.append(
+                    f"{schedule.public_name}: warning evidence refers to "
+                    f"unpublished release {observation.release}"
+                )
+                continue
+            expected_platform = (
+                row_platforms.get(observation.matrix_row)
+                if row_platforms is not None
+                else None
+            )
+            if expected_platform is not None and observation.platform != expected_platform:
+                issues.append(
+                    f"{schedule.public_name}: row {observation.matrix_row} "
+                    f"requires native platform {expected_platform}, "
+                    f"not {observation.platform or 'unspecified'}"
+                )
+                continue
+            if observation.marker_selected and observation.emitted:
                 current = by_row.get(observation.matrix_row)
                 if current is None or release < current:
                     by_row[observation.matrix_row] = release
