@@ -30,7 +30,7 @@ The arrows denote code-level data dependencies, not claims that each PEP explici
 | imports | Python import machinery and `sys.modules` | Module name, object identity, origin, namespace search locations, repeat-import identity, unresolved public exports |
 | versions | PEP 440 `Version` and `SpecifierSet` | Imported version, installed version, comparison relation, specifier, membership result |
 | markers | PEP 508 `Marker` and explicit environments | Per-row expression, selected Boolean, requested extra, chosen type-contract set, log line |
-| types | PEP 484/544/695 contracts and mypy | Selected protocol sets, unknown sets, exported names, missing wheel names, variance result |
+| types | PEP 484/544 contracts and mypy | Selected protocol sets, unknown sets, exported names, missing wheel names, variance result. PEP 695 syntax is not yet used because the supported interpreter floor remains Python 3.10. |
 | build | PEP 517/621 backend and archive metadata | sdist/wheel hashes, project identity, requirements, top-level packages, public `__all__`, backend, dynamic-version state |
 | licenses | PEP 639 metadata plus SPDX grammar and archive member names | License expression, LicenseRef mapping, source-file presence, per-artifact coverage, dependency issues |
 | deprecations | Emitted warning observations and project release history | Required marker rows, release of first observed warning per row, effective global start, missing rows, removal-window verdict |
