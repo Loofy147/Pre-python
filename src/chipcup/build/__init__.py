@@ -8,7 +8,7 @@ import zipfile
 from dataclasses import dataclass
 from email.parser import BytesParser
 from email.policy import default
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 from packaging.utils import canonicalize_name
@@ -30,6 +30,7 @@ class ArtifactInfo:
     version: str
     sha256: str
     members: tuple[str, ...]
+    requires_dist: tuple[str, ...] = ()
 
 
 def accept_type_receipt(receipt: object) -> BuildEvidence:
@@ -49,14 +50,42 @@ def accept_type_receipt(receipt: object) -> BuildEvidence:
     return BuildEvidence(source_digest=digest.lower(), passed=True)
 
 
-def _metadata_info(data: bytes) -> tuple[str, str]:
+def _metadata_info(data: bytes) -> tuple[str, str, tuple[str, ...]]:
     message = BytesParser(policy=default).parsebytes(data)
     name = message.get("Name")
     version = message.get("Version")
     if not name or not version:
         raise ValueError("artifact metadata must contain Name and Version")
     Version(version)
-    return str(name), str(version)
+    requires_dist = tuple(sorted(message.get_all("Requires-Dist", [])))
+    return str(name), str(version), requires_dist
+
+
+def _validate_distribution_directory(
+    directory: str,
+    suffix: str,
+    name: str,
+    version: str,
+    *,
+    kind: str,
+) -> None:
+    if not directory.endswith(suffix):
+        raise ValueError(f"{kind} metadata is outside its expected distribution directory")
+    stem = directory[: -len(suffix)]
+    try:
+        directory_name, directory_version = stem.rsplit("-", 1)
+    except ValueError as error:
+        raise ValueError(f"{kind} distribution directory has no name-version boundary") from error
+    if canonicalize_name(directory_name) != canonicalize_name(name):
+        raise ValueError(
+            f"{kind} directory project name {directory_name!r} "
+            f"does not match metadata name {name!r}"
+        )
+    if Version(directory_version) != Version(version):
+        raise ValueError(
+            f"{kind} directory version {directory_version!r} "
+            f"does not match metadata version {version!r}"
+        )
 
 
 def inspect_artifact(path: str | Path) -> ArtifactInfo:
@@ -66,28 +95,45 @@ def inspect_artifact(path: str | Path) -> ArtifactInfo:
     if artifact.name.endswith(".whl"):
         with zipfile.ZipFile(artifact) as archive:
             members = tuple(sorted(archive.namelist()))
-            metadata_names = [name for name in members if name.endswith(".dist-info/METADATA")]
+            metadata_names = [
+                name for name in members if name.endswith(".dist-info/METADATA")
+            ]
             if len(metadata_names) != 1:
                 raise ValueError("wheel must contain exactly one dist-info/METADATA")
-            name, version = _metadata_info(archive.read(metadata_names[0]))
+            metadata_path = PurePosixPath(metadata_names[0])
+            if len(metadata_path.parts) != 2 or metadata_path.parts[1] != "METADATA":
+                raise ValueError("wheel METADATA must be directly inside its dist-info directory")
+            name, version, requires_dist = _metadata_info(archive.read(metadata_names[0]))
+            _validate_distribution_directory(
+                metadata_path.parts[0], ".dist-info", name, version, kind="wheel"
+            )
         kind = "wheel"
     elif artifact.name.endswith((".tar.gz", ".tar.bz2", ".tar.xz")):
         with tarfile.open(artifact, "r:*") as archive:
             members = tuple(sorted(member.name for member in archive.getmembers()))
             metadata_members = [
-                member for member in archive.getmembers()
+                member
+                for member in archive.getmembers()
                 if member.isfile() and member.name.endswith("/PKG-INFO")
             ]
             if len(metadata_members) != 1:
                 raise ValueError("sdist must contain exactly one PKG-INFO")
+            metadata_path = PurePosixPath(metadata_members[0].name)
+            if len(metadata_path.parts) != 2 or metadata_path.parts[1] != "PKG-INFO":
+                raise ValueError("sdist PKG-INFO must be at the source root")
             stream = archive.extractfile(metadata_members[0])
             if stream is None:
                 raise ValueError("could not read sdist PKG-INFO")
-            name, version = _metadata_info(stream.read())
+            name, version, requires_dist = _metadata_info(stream.read())
+            _validate_distribution_directory(
+                metadata_path.parts[0], "", name, version, kind="sdist"
+            )
         kind = "sdist"
     else:
         raise ValueError(f"unsupported artifact type: {artifact.name}")
-    return ArtifactInfo(artifact, kind, name, version, digest, members)
+    return ArtifactInfo(
+        artifact, kind, name, version, digest, members, requires_dist
+    )
 
 
 def compare_artifacts(sdist: ArtifactInfo, wheel: ArtifactInfo) -> tuple[str, str]:
@@ -97,6 +143,8 @@ def compare_artifacts(sdist: ArtifactInfo, wheel: ArtifactInfo) -> tuple[str, st
         raise ValueError("sdist and wheel project names differ")
     if Version(sdist.version) != Version(wheel.version):
         raise ValueError("sdist and wheel versions differ")
+    if sdist.requires_dist != wheel.requires_dist:
+        raise ValueError("sdist and wheel Requires-Dist metadata differ")
     return sdist.name, sdist.version
 
 
