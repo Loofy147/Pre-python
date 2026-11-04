@@ -1,51 +1,61 @@
-"""PEP 387 warning windows, soft deprecations and lazy compatibility shims."""
+"""Warning evidence and project-owned removal windows.
+
+This module deliberately does not import chipcup.imports. The CLI entry point
+composes the audit in a fresh process and is the cycle-closing boundary.
+"""
 
 from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Callable, Mapping, Sequence
 
 from packaging.version import Version
+
+__all__ = [
+    "DeprecationAuditResult",
+    "DeprecationSchedule",
+    "WarningObservation",
+    "capture_warning_observation",
+    "validate_license_dependencies",
+    "validate_schedules",
+    "warn_deprecated",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class WarningObservation:
+    release: str
+    matrix_row: str
+    marker_selected: bool
+    emitted: bool
+    warning_count: int
 
 
 @dataclass(frozen=True, slots=True)
 class DeprecationSchedule:
     public_name: str
-    first_warning_release: str
-    removal_release: str | None = None
+    removal_release: str | None
+    required_matrix_rows: tuple[str, ...]
+    required_license_refs: tuple[str, ...] = ()
     soft: bool = False
 
-    def validate(self, published_releases: Iterable[str]) -> None:
-        if self.soft:
-            if self.removal_release is not None:
-                raise ValueError("soft deprecations cannot have an automatic removal release")
-            return
-        if self.removal_release is None:
-            return
-        first = Version(self.first_warning_release)
-        removal = Version(self.removal_release)
-        if removal <= first:
-            raise ValueError("removal release must follow the first warning release")
-        intervening: set[tuple[int, int]] = set()
-        for raw in published_releases:
-            release = Version(raw)
-            if first < release < removal and len(release.release) >= 2:
-                intervening.add((release.release[0], release.release[1]))
-        if len(intervening) < 2:
-            raise ValueError(
-                "regular deprecation requires two distinct published minor releases "
-                "between warning and removal"
-            )
+    def __post_init__(self) -> None:
+        if self.soft and self.removal_release is not None:
+            raise ValueError("soft deprecations cannot schedule automatic removal")
+        if not self.soft and self.removal_release is not None and not self.required_matrix_rows:
+            raise ValueError("a hard removal schedule must name its required marker rows")
 
 
-def validate_schedules(
-    schedules: Sequence[object], published_releases: Sequence[str]
-) -> None:
-    for schedule in schedules:
-        if not isinstance(schedule, DeprecationSchedule):
-            raise TypeError("deprecation entries must be DeprecationSchedule values")
-        schedule.validate(published_releases)
+@dataclass(frozen=True, slots=True)
+class DeprecationAuditResult:
+    effective_warning_releases: Mapping[str, str]
+    missing_warning_rows: Mapping[str, tuple[str, ...]]
+    issues: tuple[str, ...]
+
+    @property
+    def passed(self) -> bool:
+        return not self.issues
 
 
 def warn_deprecated(
@@ -55,24 +65,116 @@ def warn_deprecated(
     category: type[Warning] = DeprecationWarning,
     stacklevel: int = 2,
 ) -> None:
-    warnings.warn(message or f"{public_name} is deprecated", category, stacklevel=stacklevel)
+    warnings.warn(
+        message or f"{public_name} is deprecated",
+        category,
+        stacklevel=stacklevel,
+    )
 
 
-def resolve_shim(
-    old_name: str,
-    target_module: str,
-    target_symbol: str,
-    *,
-    message: str | None = None,
-) -> object:
-    """Warn, then delegate canonical resolution to the import boundary."""
-    warn_deprecated(old_name, message=message, stacklevel=3)
-    from chipcup.imports import load_module
+def capture_warning_observation(
+    release: str,
+    matrix_row: str,
+    marker_selected: bool,
+    invoke: Callable[[], object],
+) -> WarningObservation:
+    """Record an actual warning only when the marker row selected the API."""
+    if not marker_selected:
+        return WarningObservation(release, matrix_row, False, False, 0)
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always", DeprecationWarning)
+        invoke()
+    count = sum(
+        1 for item in recorded if issubclass(item.category, DeprecationWarning)
+    )
+    return WarningObservation(release, matrix_row, True, count > 0, count)
 
-    module = load_module(target_module)
-    try:
-        return getattr(module, target_symbol)
-    except AttributeError as error:
-        raise AttributeError(
-            f"compatibility target {target_module}.{target_symbol} is unavailable"
-        ) from error
+
+def validate_license_dependencies(
+    schedules: Sequence[DeprecationSchedule],
+    resolved_license_refs: Mapping[str, str],
+    declared_license_files: Sequence[str],
+) -> tuple[str, ...]:
+    issues: list[str] = []
+    declared = set(declared_license_files)
+    for schedule in schedules:
+        for reference in schedule.required_license_refs:
+            path = resolved_license_refs.get(reference)
+            if path is None:
+                issues.append(
+                    f"{schedule.public_name}: unresolved license reference {reference}"
+                )
+            elif path not in declared:
+                issues.append(
+                    f"{schedule.public_name}: {reference} maps to {path}, "
+                    "which is not declared as License-File"
+                )
+    return tuple(issues)
+
+
+def validate_schedules(
+    schedules: Sequence[DeprecationSchedule],
+    published_releases: Sequence[str],
+    observations: Sequence[WarningObservation],
+) -> DeprecationAuditResult:
+    """Validate removal windows from emitted-warning evidence, not declarations."""
+    effective: dict[str, str] = {}
+    missing_rows: dict[str, tuple[str, ...]] = {}
+    issues: list[str] = []
+
+    for schedule in schedules:
+        if schedule.soft:
+            continue
+        if schedule.removal_release is None:
+            continue
+
+        by_row: dict[str, Version] = {}
+        for observation in observations:
+            if (
+                observation.matrix_row in schedule.required_matrix_rows
+                and observation.marker_selected
+                and observation.emitted
+            ):
+                release = Version(observation.release)
+                current = by_row.get(observation.matrix_row)
+                if current is None or release < current:
+                    by_row[observation.matrix_row] = release
+
+        absent = tuple(
+            row for row in schedule.required_matrix_rows if row not in by_row
+        )
+        if absent:
+            missing_rows[schedule.public_name] = absent
+            issues.append(
+                f"{schedule.public_name}: no emitted DeprecationWarning for "
+                f"selected marker rows {', '.join(absent)}"
+            )
+            continue
+
+        # The global window starts only after every required supported row has
+        # observed the warning; use the latest of their first-observed releases.
+        start = max(by_row.values())
+        removal = Version(schedule.removal_release)
+        effective[schedule.public_name] = str(start)
+        if removal <= start:
+            issues.append(
+                f"{schedule.public_name}: removal release must follow "
+                "the effective warning release"
+            )
+            continue
+
+        intervening_minor_releases: set[tuple[int, int]] = set()
+        for raw in published_releases:
+            release = Version(raw)
+            if start < release < removal and len(release.release) >= 2:
+                intervening_minor_releases.add(
+                    (release.release[0], release.release[1])
+                )
+        if not intervening_minor_releases:
+            issues.append(
+                f"{schedule.public_name}: removal requires one published "
+                "project minor release after the warning was observed on "
+                "all required marker rows"
+            )
+
+    return DeprecationAuditResult(effective, missing_rows, tuple(issues))
