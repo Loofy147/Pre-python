@@ -158,7 +158,8 @@ def _parse_sdist_pyproject(
     candidates = [
         (path, content)
         for path, content in files.items()
-        if path.replace("\\", "/").endswith("/pyproject.toml")
+        if len(PurePosixPath(path.replace("\\", "/")).parts) == 2
+        and PurePosixPath(path.replace("\\", "/")).name == "pyproject.toml"
     ]
     if len(candidates) != 1:
         raise ValueError("sdist must contain exactly one root pyproject.toml")
@@ -287,7 +288,10 @@ def _read_sdist(path: Path) -> tuple[dict[str, bytes], bytes, str]:
             if stream is not None:
                 files[member.name] = stream.read()
         metadata_names = [
-            name for name in files if name.endswith("/PKG-INFO")
+            name
+            for name in files
+            if len(PurePosixPath(name).parts) == 2
+            and PurePosixPath(name).name == "PKG-INFO"
         ]
         if len(metadata_names) != 1:
             raise ValueError("sdist must contain exactly one PKG-INFO")
