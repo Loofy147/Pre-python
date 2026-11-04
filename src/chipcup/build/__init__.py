@@ -69,9 +69,9 @@ def _validate_distribution_directory(
     *,
     kind: str,
 ) -> None:
-    if not directory.endswith(suffix):
+    if suffix and not directory.endswith(suffix):
         raise ValueError(f"{kind} metadata is outside its expected distribution directory")
-    stem = directory[: -len(suffix)]
+    stem = directory[: -len(suffix)] if suffix else directory
     try:
         directory_name, directory_version = stem.rsplit("-", 1)
     except ValueError as error:
