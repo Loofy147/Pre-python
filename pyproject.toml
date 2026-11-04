@@ -34,7 +34,7 @@ dependencies = [
 test = ["build>=1.2.2", "mypy>=1.13", "pytest>=8.3", "twine>=6.1"]
 
 [project.scripts]
-chipcup.audit = "chipcup.cli:main"
+"chipcup.audit" = "chipcup.cli:main"
 
 [project.entry-points."chipcup.plugins"]
 demo = "chipcup.plugins.demo:DemoPlugin"
