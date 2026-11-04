@@ -46,7 +46,7 @@ def test_sdist_root_identity_must_match_pkg_info(tmp_path: Path):
     with tarfile.open(path, "w:gz") as archive:
         for name, content in (
             ("different-0.1.0/PKG-INFO", metadata),
-            ("different-0.1.0/pyproject.toml", b"[build-system]\nbuild-backend='setuptools.build_meta'\n"),
+            ("different-0.1.0/pyproject.toml", b"[build-system]\nrequires=['setuptools>=77']\nbuild-backend='setuptools.build_meta'\n\n[project]\nname='chipcup'\nversion='0.1.0'\ndynamic=[]\n"),
         ):
             info = tarfile.TarInfo(name)
             info.size = len(content)
@@ -55,7 +55,7 @@ def test_sdist_root_identity_must_match_pkg_info(tmp_path: Path):
         inspect_artifact(path)
 
 
-def test_dynamic_version_metadata_is_not_accepted_as_reproducible(artifact_pair, tmp_path):
+def test_dynamic_version_with_matching_literal_hook_is_reproducible(artifact_pair, tmp_path):
     sdist, wheel = artifact_pair
     dynamic_sdist = tmp_path / "chipcup-0.1.0.tar.gz"
     with tarfile.open(sdist, "r:gz") as source, tarfile.open(dynamic_sdist, "w:gz") as output:
