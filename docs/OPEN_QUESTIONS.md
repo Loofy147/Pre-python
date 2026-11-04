@@ -1,14 +1,24 @@
 # Open questions for maintainers
 
-These questions are deliberately open-ended. They describe decisions that need evidence, not checkboxes with predetermined answers.
+These questions describe evidence and policy decisions that remain open.
 
-1. What evidence should be sufficient to trust a third-party plugin discovered through the PEP 420 namespace and entry-point mechanism, and how should that evidence be revoked?
-2. How should the package validate SPDX license identifiers against the evolving SPDX License List without making offline builds dependent on a network lookup?
-3. When a LicenseRef is introduced, what documentation and file-level evidence should be required before a release can claim complete license coverage?
-4. Which release-history source should become authoritative if tags, package-index versions and signed attestations disagree?
-5. Under what conditions should a deprecation be soft rather than regular, and what observable evidence should justify keeping it indefinitely?
-6. How should dynamic PEP 517 metadata be admitted without allowing the sdist and wheel to describe different projects?
-7. Which properties should a type-audit receipt prove, and how can the build backend verify its provenance without pretending that static typing proves runtime safety?
-8. What additional tests would falsify the claim that the seven contracts remain non-reducible in a future Python packaging environment?
-9. Which compatibility guarantees should become stable before the package leaves alpha status?
-10. What should constitute a trustworthy first-party release when a GitHub artifact, package-index artifact and source tag are not byte-identical?
+1. What evidence should be sufficient to trust a third-party plugin discovered through the PEP 420 namespace and entry-point mechanisms, and how should that evidence be revoked?
+2. How should chipcup validate SPDX identifiers against the evolving SPDX License List while preserving offline builds?
+3. What provenance should a supplemental LicenseRef mapping carry when a fixture's file-scoped grant changes independently of the distribution-level License-Expression?
+4. Which release-history source is authoritative when source tags, package-index versions, and signed attestations disagree?
+5. Which supported platforms and optional extras are required marker rows for each deprecated public name, and how are native CI observations retained and linked to a release?
+6. How should dynamic PEP 517 version metadata be admitted without allowing an sdist and wheel to describe different distributions?
+7. What properties must a type-audit receipt prove, and how can its provenance be checked without treating static typing as runtime-safety evidence?
+8. Which additional tests could falsify the claim that the seven boundaries still perform distinct work as Python packaging evolves?
+9. Which compatibility guarantees must be stable before chipcup leaves alpha?
+10. What evidence should bind a GitHub release artifact, a package-index artifact, its source tag, and any build attestation?
+
+## Warning-window question
+
+**Question:** If a name's `DeprecationWarning` was only ever emitted on a platform the marker matrix never selected, does its removal window begin at the version that shipped the warning or the version that first evaluated the marker?
+
+**Current policy answer:** Neither. The release that merely shipped the warning is insufficient evidence, and evaluating a marker without executing the deprecated name is insufficient evidence. The warning clock begins only after the warning has actually been emitted on every required, selected marker row for that public name. The effective start is the latest of those first-observed releases.
+
+If a platform row was never selected, it contributes no warning evidence. If the row is required by the compatibility policy, removal remains blocked until that platform is selected and emits the warning. If the platform is not a supported target, the maintainer must explicitly remove it from the required matrix with a documented compatibility decision; the audit must not silently treat an unselected row as successful.
+
+This is a chipcup project policy informed by compatibility practice. PEP 387 itself is CPython's policy, not a third-party PyPI package mandate.
