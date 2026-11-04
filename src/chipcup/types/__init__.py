@@ -120,11 +120,15 @@ def audit_public_surface(
         unknown_stub_sets=audit_stub_sets(selected_stub_sets),
         typed_public_names=typed_names,
         missing_wheel_exports=missing,
-        reader_is_covariant=(
-            bool(Reader.__parameters__)
-            and bool(Reader.__parameters__[0].__covariant__)
-        ),
+        reader_is_covariant=_reader_is_covariant(),
     )
+
+
+def _reader_is_covariant() -> bool:
+    parameters: object = getattr(Reader, "__parameters__", ())
+    if not isinstance(parameters, tuple) or not parameters:
+        return False
+    return bool(getattr(parameters[0], "__covariant__", False))
 
 
 def prepare_build_receipt(receipt: object) -> BuildEvidence:
