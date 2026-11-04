@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A typed Python packaging auditor with seven executable formal-system boundaries."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT AND LicenseRef-Fixture-Dual"
+license = "MIT"
 license-files = ["LICENSE", "LICENSES/Fixture-Dual.txt"]
 authors = [{ name = "chipcup contributors" }]
 keywords = ["python-packaging", "pep-440", "pep-508", "spdx", "typing", "build"]
