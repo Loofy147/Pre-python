@@ -80,8 +80,8 @@ def parse_license_expression(expression: str) -> LicenseNode:
     tokens = _tokens(expression)
     index = 0
 
-    def peek() -> str | None:
-        return tokens[index] if index < len(tokens) else None
+    def peek() -> str:
+        return tokens[index] if index < len(tokens) else ""
 
     def take() -> str:
         nonlocal index
@@ -104,7 +104,7 @@ def parse_license_expression(expression: str) -> LicenseNode:
 
     def with_expression() -> LicenseNode:
         left = atom()
-        if peek() is not None and peek().upper() == "WITH":
+        if peek().upper() == "WITH":
             take()
             right = atom()
             if left.kind != "id" or right.kind != "id":
@@ -114,14 +114,14 @@ def parse_license_expression(expression: str) -> LicenseNode:
 
     def parse_and() -> LicenseNode:
         children = [with_expression()]
-        while peek() is not None and peek().upper() == "AND":
+        while peek().upper() == "AND":
             take()
             children.append(with_expression())
         return children[0] if len(children) == 1 else LicenseNode("and", children=tuple(children))
 
     def parse_or() -> LicenseNode:
         children = [parse_and()]
-        while peek() is not None and peek().upper() == "OR":
+        while peek().upper() == "OR":
             take()
             children.append(parse_and())
         return children[0] if len(children) == 1 else LicenseNode("or", children=tuple(children))
