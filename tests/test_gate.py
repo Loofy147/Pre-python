@@ -1,57 +1,64 @@
-import tarfile
-import zipfile
-from dataclasses import dataclass
-from io import BytesIO
+from pathlib import Path
 
 from chipcup.gate import GateRequest, evaluate_release
 
-METADATA = b"Metadata-Version: 2.4\nName: chipcup\nVersion: 0.1.0\nLicense-Expression: MIT\n\n"
 
-
-@dataclass
-class Receipt:
-    source_digest: str = "c" * 64
-    passed: bool = True
-
-
-def test_release_gate_runs_all_seven_boundaries(tmp_path):
-    wheel = tmp_path / "chipcup-0.1.0-py3-none-any.whl"
-    with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr("chipcup-0.1.0.dist-info/METADATA", METADATA)
-        archive.writestr("chipcup-0.1.0.dist-info/licenses/LICENSE", "MIT")
-    sdist = tmp_path / "chipcup-0.1.0.tar.gz"
-    with tarfile.open(sdist, "w:gz") as archive:
-        for name, content in (
-            ("chipcup-0.1.0/PKG-INFO", METADATA),
-            ("chipcup-0.1.0/LICENSE", b"MIT"),
-        ):
-            info = tarfile.TarInfo(name)
-            info.size = len(content)
-            archive.addfile(info, BytesIO(content))
-    (tmp_path / "LICENSE").write_text("MIT", encoding="utf-8")
+def test_release_gate_reports_seven_independent_results(artifact_pair):
+    sdist, wheel = artifact_pair
+    root = Path(__file__).resolve().parents[1]
 
     report = evaluate_release(
         GateRequest(
             sdist_path=sdist,
             wheel_path=wheel,
-            audit_receipt=Receipt(),
-            project_root=tmp_path,
+            project_root=root,
         )
     )
+
     assert report.passed
-    assert [step.boundary for step in report.steps] == [
-        "imports", "versions", "markers", "types", "build", "licenses", "deprecations"
-    ]
+    assert report.imports.passed
+    assert report.versions.passed
+    assert report.markers.passed
+    assert report.types.passed
+    assert report.build.passed
+    assert report.licenses.passed
+    assert report.deprecations.passed
+
+    assert set(report.markers.selected_stub_sets) == {"posix", "windows", "gpu"}
+    assert report.deprecations.effective_warning_releases["legacy_parse_version"] == "0.1.0"
+    assert report.sdist_sha256
+    assert report.wheel_sha256
+
+    serialized = report.to_dict()
+    assert set(serialized) == {
+        "passed",
+        "imports",
+        "versions",
+        "markers",
+        "types",
+        "build",
+        "licenses",
+        "deprecations",
+        "artifacts",
+    }
 
 
-def test_release_gate_stops_at_failed_type_receipt(tmp_path):
-    report = evaluate_release(
-        GateRequest(
-            sdist_path=tmp_path / "missing.tar.gz",
-            wheel_path=tmp_path / "missing.whl",
-            audit_receipt=object(),
-            project_root=tmp_path,
-        )
+def test_release_gate_exposes_individual_failure_algebras(artifact_pair):
+    from dataclasses import replace
+
+    sdist, wheel = artifact_pair
+    root = Path(__file__).resolve().parents[1]
+    request = GateRequest(
+        sdist_path=sdist,
+        wheel_path=wheel,
+        project_root=root,
+        version_specifier=">=9.0",
     )
-    assert not report.passed
-    assert report.failed_boundary == "types"
+
+    report = evaluate_release(request)
+
+    assert not report.versions.passed
+    # The remaining report fields are still available for diagnosis rather
+    # than being replaced by a single first-failure score.
+    assert report.imports.passed
+    assert report.build.passed
