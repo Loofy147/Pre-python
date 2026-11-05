@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Mapping, Sequence, cast
 
 from chipcup._contracts import MatrixRow, WarningObservation
+from chipcup.exit_codes import ExitCode, select_exit_code
 
 
 def _string(
@@ -141,16 +142,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             "failure": "module-not-found",
             "message": str(error),
         }, indent=2))
-        return 3
+        return int(ExitCode.MODULE_NOT_FOUND)
     except Exception as error:
         print(json.dumps({
             "passed": False,
             "failure": "audit-error",
             "message": f"{type(error).__name__}: {error}",
         }, indent=2))
-        return 1
+        return int(ExitCode.AUDIT_ERROR)
 
     print(json.dumps(report, indent=2, default=str))
-    return 0 if report["passed"] else 1
+    return int(select_exit_code(report))
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

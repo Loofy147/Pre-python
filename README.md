@@ -4,7 +4,7 @@
 
 Closest tools remain useful:
 - **Griffe** compares Python API surfaces; chipcup adds native warning chronology and binds it to exact built artifacts.
-- **mypy** checks static typing; chipcup verifies that the declared stub contract files are present in the shipped wheel and have licence coverage.
+- **mypy** checks static typing; chipcup verifies that the declared stub contract files are present in the exact wheel and have licence coverage.
 - **Twine** validates distribution metadata presentation; chipcup additionally compares the sdist and wheel payloads and evaluates the API lifecycle.
 - **packaging** evaluates PEP 440 versions and PEP 508 markers; chipcup preserves those results as evidence linked to warning and artifact receipts.
 
@@ -21,7 +21,32 @@ python -m chipcup.cli --sdist dist/chipcup-0.1.0.tar.gz \
 
 Without `--build-isolation-verified`, artifact metadata and contents are still inspected but `BUILD_PROVENANCE=UNVERIFIED`; the flag is an explicit caller attestation that the archives were built in isolation. CI supplies it only after its isolated build steps. The installed console command is `chipcup.audit`. Its module imports only the standard library until `main()` is entered. The entry point then lazily imports `chipcup.runtime`, which loads the seven evaluators and passes immutable receipts between them.
 
-Exit codes: **0** means every required verdict is verified; **1** means a failed or unverified required verdict; **3** means a required module could not be imported.
+### Stable process exit codes
+
+The JSON report remains multi-sorted: every boundary keeps its own verdict, state, evidence and issues. The process status is a deterministic summary only; it never replaces the report.
+
+| Exit | Meaning |
+|---:|---|
+| 0 | Every required receipt is verified (`PASS` or `NOT_APPLICABLE`) |
+| 1 | Unexpected audit/runtime error or malformed receipt state |
+| 2 | Required deprecation warning was not observed on every selected platform row |
+| 3 | SPDX expression, LicenseRef mapping or shipped license coverage failed |
+| 4 | Golden fixture is missing, malformed or outside its geometry tolerance |
+| 5 | Typed public surface or selected stub contract failed |
+| 6 | sdist/wheel metadata, exports or build provenance diverged |
+| 7 | Required build artifact/provenance is unavailable or unverified |
+| 8 | Required marker matrix or contract-set selection failed |
+| 9 | Canonical import identity or public import surface failed |
+| 10 | Imported/installed version identity or PEP 440 policy failed |
+| 11 | Built artifact and installed distribution release identities differ |
+| 12 | Required audit module could not be imported |
+| 13 | A required receipt is missing or remains unverified |
+
+When multiple fatal outcomes coexist, the later entry wins in this **lowest-to-highest precedence order**:
+
+`AUDIT_ERROR (1) < AUDIT_UNVERIFIED (13) < DEPRECATION_UNPROVEN (2) < TYPE_SURFACE_INVALID (5) < MARKER_MATRIX_INVALID (8) < IMPORT_AUDIT_FAILED (9) < VERSION_MISMATCH (10) < BUILD_RELEASE_IDENTITY (11) < BUILD_DIVERGENT (6) < LICENSE_UNRESOLVED (3) < FIXTURE_GEOMETRY (4) < BUILD_UNAVAILABLE (7)`.
+
+The order is explicit and intentionally independent of numeric exit-code order. Missing receipts never count as success. The JSON report is printed before the selected exit is returned. The mapping and precedence are implemented in `chipcup.exit_codes` and exercised by unit and CLI tests.
 
 ## Seven receipt boundaries
 
