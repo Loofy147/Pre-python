@@ -25,6 +25,7 @@ __all__ = [
     "validate_license_dependencies",
     "validate_schedules",
     "warn_deprecated",
+    "degraded_deprecation_receipt",
 ]
 
 
