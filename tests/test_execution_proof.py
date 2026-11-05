@@ -96,7 +96,7 @@ def test_subpackage_public_surfaces_are_disjoint_and_complete():
     assert expected_degraded_helpers.issubset(owner_by_name)
     assert {
         "VersionAudit", "VersionPolicy", "parse_version",
-        "degraded_receipt", "receipt_from_imports",
+        "degraded_version_receipt", "receipt_from_imports",
     }.issubset(set(importlib.import_module("chipcup.versions").__all__))
     assert not hasattr(importlib.import_module("chipcup.build"), "BuildEvidence")
 
