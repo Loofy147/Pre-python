@@ -112,6 +112,7 @@ The evidence and policy layers are the intended differentiator. The current seve
 Start at [the documentation index](docs/README.md).
 
 - [Status and implementation truth](docs/STATUS.md)
+- [Python API reference](docs/API_REFERENCE.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Evidence model](docs/EVIDENCE_MODEL.md)
 - [Policy model](docs/POLICY_MODEL.md)

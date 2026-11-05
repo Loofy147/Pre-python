@@ -13,6 +13,7 @@ Do not convert a target-design statement into an implementation claim.
 | Document | Purpose |
 |---|---|
 | [Status](STATUS.md) | Current implementation truth, verified evidence, and known gaps |
+| [Python API reference](API_REFERENCE.md) | Current public exports and experimental evaluator APIs |
 | [Architecture](ARCHITECTURE.md) | Existing execution paths and target system architecture |
 | [Evidence model](EVIDENCE_MODEL.md) | Proposed evidence envelope, trust levels, claims, and relationships |
 | [Policy model](POLICY_MODEL.md) | Verdicts, release decisions, temporal rules, and exceptions |
