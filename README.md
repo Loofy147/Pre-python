@@ -15,10 +15,11 @@ python -m pip install "chipcup[test]"
 python -m chipcup.cli --sdist dist/chipcup-0.1.0.tar.gz \
   --wheel dist/chipcup-0.1.0-py3-none-any.whl \
   --matrix fixtures/audit-matrix.json \
-  --warning-evidence warning-evidence/ --project-root .
+  --warning-evidence warning-evidence/ --project-root . \
+  --build-isolation-verified
 ```
 
-The installed console command is `chipcup.audit`. Its module imports only the standard library until `main()` is entered. The entry point then lazily imports `chipcup.runtime`, which loads the seven evaluators and passes immutable receipts between them.
+Without `--build-isolation-verified`, artifact metadata and contents are still inspected but `BUILD_PROVENANCE=UNVERIFIED`; the flag is an explicit caller attestation that the archives were built in isolation. CI supplies it only after its isolated build steps. The installed console command is `chipcup.audit`. Its module imports only the standard library until `main()` is entered. The entry point then lazily imports `chipcup.runtime`, which loads the seven evaluators and passes immutable receipts between them.
 
 Exit codes: **0** means every required verdict is verified; **1** means a failed or unverified required verdict; **3** means a required module could not be imported.
 

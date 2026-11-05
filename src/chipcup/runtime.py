@@ -21,7 +21,7 @@ def run_receipt_cycle(
     warning_observations: Sequence[WarningObservation],
     version_specifier: str = ">=0.1.0,<1.0.0",
     published_releases: Sequence[str] = ("0.1.0",),
-    build_isolation_verified: bool = True,
+    build_isolation_verified: bool = False,
 ) -> dict[str, object]:
     """Run build→licenses→types→markers→deprecations→imports→versions→build."""
     from chipcup.build import close_version_cycle, evaluate_artifact_receipt

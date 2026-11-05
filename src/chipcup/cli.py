@@ -108,6 +108,11 @@ def _parser() -> argparse.ArgumentParser:
         default=">=0.1.0,<1.0.0",
         help="PEP 440 specifier required for the installed distribution",
     )
+    parser.add_argument(
+        "--build-isolation-verified",
+        action="store_true",
+        help="attest that the supplied sdist and wheel were built in isolation",
+    )
     return parser
 
 
@@ -128,7 +133,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             warning_observations=observations,
             version_specifier=args.version_specifier,
             published_releases=("0.1.0",),
-            build_isolation_verified=True,
+            build_isolation_verified=args.build_isolation_verified,
         )
     except ModuleNotFoundError as error:
         print(json.dumps({

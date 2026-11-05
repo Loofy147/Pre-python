@@ -88,10 +88,11 @@ jobs:
             --wheel dist/chipcup-0.1.0-py3-none-any.whl \
             --matrix fixtures/audit-matrix.json \
             --warning-evidence warning-evidence/ \
-            --project-root .
+            --project-root . \
+            --build-isolation-verified
       - name: Assert measured fixture and all seven receipt verdicts
         run: |
-          python -c "import json, subprocess, sys; p=subprocess.run([sys.executable, '-m', 'chipcup.cli', '--sdist', 'dist/chipcup-0.1.0.tar.gz', '--wheel', 'dist/chipcup-0.1.0-py3-none-any.whl', '--matrix', 'fixtures/audit-matrix.json', '--warning-evidence', 'warning-evidence/', '--project-root', '.'], capture_output=True, text=True); d=json.loads(p.stdout); assert p.returncode == 0, d; assert d['passed'], d; assert all(v['state'] == 'PASS' for k,v in d['receipts'].items()), d['receipts']"
+          python -c "import json, subprocess, sys; p=subprocess.run([sys.executable, '-m', 'chipcup.cli', '--sdist', 'dist/chipcup-0.1.0.tar.gz', '--wheel', 'dist/chipcup-0.1.0-py3-none-any.whl', '--matrix', 'fixtures/audit-matrix.json', '--warning-evidence', 'warning-evidence/', '--project-root', '.', '--build-isolation-verified'], capture_output=True, text=True); d=json.loads(p.stdout); assert p.returncode == 0, d; assert d['passed'], d; assert all(v['state'] == 'PASS' for k,v in d['receipts'].items()), d['receipts']"
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: chipcup-distributions

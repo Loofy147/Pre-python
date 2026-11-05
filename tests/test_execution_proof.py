@@ -176,3 +176,21 @@ def test_missing_predecessor_receipt_forces_boundary_specific_unverified(tmp_pat
     for boundary, receipt in results.items():
         assert receipt.state is ReceiptState.UNVERIFIED
         assert receipt.verdict == expected[boundary]
+
+
+def test_build_without_isolation_attestation_is_unverified(artifact_pair):
+    from chipcup.build import evaluate_artifact_receipt
+
+    sdist, wheel = artifact_pair
+    receipt = evaluate_artifact_receipt(
+        sdist_path=sdist,
+        wheel_path=wheel,
+        project_root=ROOT,
+        build_isolation_verified=False,
+    )
+    assert receipt.state is ReceiptState.UNVERIFIED
+    assert receipt.verdict == "BUILD_PROVENANCE"
+    # The degraded result retains artifact manifests for inspection.
+    assert receipt.evidence["sdist_members"]
+    assert receipt.evidence["wheel_members"]
+    assert receipt.evidence["geometry"]["source"]["passed"] is True
