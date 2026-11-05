@@ -1,65 +1,132 @@
-# Architecture and evidence contract
+# Architecture
 
-## Problem
+## Status boundary
 
-API snapshot tools, type checkers and archive validators prove different parts of a release. chipcup binds their evidence to the exact sdist and wheel so a removal decision can be traced to warnings emitted on the required platforms, typed contract files shipped in the wheel, and licence data present in both artifacts.
+This document separates:
+- **CURRENT:** 0.1.0 Alpha source contains a Python-specific seven-boundary receipt experiment and a separate GateReport evaluation path.
+- **TARGET:** the Change Assurance Engine below is proposed architecture, not shipped code.
 
-## Runtime dependency order
+Reviewed main commit: 7ef2c82fb2ebdf2e08376b154bd6e9f112b6a5ca.
 
-```text
-build → licenses → types → markers → deprecations → imports → versions → build
-```
+## Current implementation
 
-The edges are runtime receipt dependencies, not evaluator imports. Each evaluator consumes a neutral immutable receipt from `chipcup._contracts` and returns its own receipt. The runtime orchestrator alone sequences evaluators.
+The CLI calls runtime.run_receipt_cycle. It composes build, licenses, types, markers, deprecations, imports, versions, and build-cycle closure.
 
-| Edge | Receipt passed | Why the downstream boundary needs it |
-|---|---|---|
-| build → licenses | exact sdist/wheel member lists and Core Metadata | licence coverage must inspect the artifacts already built, not request a rebuild |
-| licenses → types | validated license expression, License-File and LicenseRef coverage | typed stub files are accepted only when they exist in the distribution under resolved licence coverage |
-| types → markers | declared contract-set IDs and wheel stub paths | marker rows may select only contracts present in the verified stub manifest |
-| markers → deprecations | selected row IDs and target platforms | removal windows require actual warning observations on each selected required platform |
-| deprecations → imports | verified warning-window state | import audit checks the public alias state only after the removal policy is known |
-| imports → versions | canonical module identity and imported version source | PEP 440 compares the version attached to the imported package with installed metadata |
-| versions → build | installed version and specifier verdict | the build boundary closes by checking that the exact artifacts identify the same release |
+Shared BoundaryReceipt records contain a boundary name, closed AuditVerdict, ReceiptState, evidence mapping, and issue list. The dataclass is frozen, but the evidence mapping is not deeply immutable.
 
-### Import boundaries
+The public root evaluate_release API uses chipcup.gate and a GateRequest/GateReport model. This is a separate execution and output path. The project has not selected one authoritative public report contract.
 
-- Seven evaluators may import `chipcup._contracts`, standard-library modules and external libraries. They may not import another evaluator.
-- `chipcup.runtime` imports evaluators inside `run_receipt_cycle`; it does not import them at module load.
-- `chipcup.cli` imports `chipcup.runtime` only inside `main()`. CI asserts that importing the console module alone does not load the runtime or evaluator packages.
-- PEP 562 remains the root package's lazy attribute mechanism. PEP 420 namespace discovery is separately exercised by the import evaluator.
-- The only lazy module import required to launch the audit is the `main() → runtime` boundary. Removing it leaves the console entry point without its dispatcher while preserving an importable CLI module.
+The current CLI hardcodes published release history around 0.1.0 and accepts a caller-supplied build-isolation flag. Neither is an acceptable future trust mechanism.
 
-## Seven systems and verdicts
+## Target architecture
 
-Each evaluator reports a named result: `BUILD_PROVENANCE`, `LICENSE_COVERAGE`, `TYPE_SURFACE`, `MARKER_MATRIX`, `DEPRECATION_WINDOW`, `IMPORT_AUDIT` and `VERSION_HISTORY`. A receipt state is `PASS`, `FAIL`, `UNVERIFIED` or `NOT_APPLICABLE`. Missing evidence is never silently promoted to PASS. All named boundary and fixture verdicts are members of `chipcup._contracts.AuditVerdict`, a closed `str` enum; `BoundaryReceipt` rejects unregistered strings and serializes the enum's stable value.
+~~~text
+SCM / CLI / CI event
+        |
+        v
+[1] Subject resolver
+    repository, base, head, tree, diff, artifact IDs
+        |
+        v
+[2] Change normalizer + classifiers
+    source/API, dependency, build, config, security, schema
+        |
+        v
+[3] Impact analyzers + coverage evaluator
+    affected symbols, modules, tests, consumers, blind spots
+        |
+        v
+[4] Obligation compiler
+    versioned policy -> required evidence and checks
+        |
+        v
+[5] Verification adapter runner
+    Griffe, tests, mypy, scanners, build, SPDX, provenance
+        |
+        v
+[6] Evidence ledger
+    raw outputs, digests, identity, lineage, corrections
+        |
+        v
+[7] Policy evaluator
+    obligation results, trust, waivers, conflicts
+        |
+        v
+[8] Assurance dossier + status check
+    ALLOW / DENY / APPROVAL_REQUIRED
+~~~
 
-## Build and fixture geometry
+An optional agent may investigate findings or suggest repairs. It is outside the trusted policy path.
 
-The build evaluator inspects an sdist and wheel without extracting them. It compares project identity, version, `Requires-Dist`, package names, public exports, licence metadata and backend/version provenance. It reads `fixtures/chip.dat` from the source, sdist and wheel.
+## Component responsibilities
 
-The golden rim is the line through `(-3, 12)` and `(3, 12)` mm. The notch apex is `(0, 9.6)` mm, giving depth 2.40 mm. The allowed point deviation is five percent of depth: 0.12 mm. Every notch point is compared by Euclidean distance with the reference profile. The wheel and sdist must also contain the golden reference. The tests perturb the apex by 0.05 mm and 0.13 mm and assert pass/fail respectively.
+### Subject resolver
 
-## Licences and typed stubs
+Creates immutable identities for repository, base/candidate commits, tree, merge base, diff, build inputs, sdist, wheel, and later deployment subjects. A branch name or PR number is not subject identity.
 
-The distribution expression is MIT. The fixture has a supplemental file-scoped grant mapping `LicenseRef-Fixture-Dual → LICENSES/Fixture-Dual.txt → fixtures/chip.dat`. The checker confirms the mapping text and subject file appear in source, sdist and wheel. It does not claim PEP 639 natively assigns an expression to an individual path.
+The dossier must distinguish a PR head commit from the merge-queue merge-group commit actually tested.
 
-`src/chipcup/stub-contracts.json` declares four contract sets. Every path must exist in source and wheel; `py.typed` must ship. The distribution-level MIT licence applies to those stub files. PEP 695 syntax is exercised in the Python 3.12+ test lane while the installed package retains its Python 3.10 floor.
+### Change normalizer and classifier
 
-## Warning chronology
+Normalizes changed paths, symbols, configuration objects, dependency edges, and declared interfaces. It emits proposed change classes with source signals. LLM classifications are advisory and preserve evidence and uncertainty.
 
-A marker simulation is not a warning observation. The platform collector invokes the public deprecated alias on the native CI OS and records the release, matrix row, platform, and whether a warning was emitted. The removal policy uses the latest first-observed release among required rows. A required row without an emitted warning blocks the window.
+### Impact analyzers and coverage evaluator
 
-PEP 387 describes CPython's compatibility policy. chipcup's third-party project rule is an explicitly chosen one-published-minor-cycle requirement.
+Uses language/ecosystem analyzers and emits affected subjects plus model coverage limitations. No graph edge means “not observed”, not “unaffected”. Unsupported constructs produce PARTIAL or UNKNOWN.
 
-## Degraded operation
+### Obligation compiler
 
-Each evaluator exports a uniquely named degraded receipt helper: `degraded_build_receipt`, `degraded_license_receipt`, `degraded_type_receipt`, `degraded_marker_receipt`, `degraded_deprecation_receipt`, `degraded_import_receipt` and `degraded_version_receipt`. Each result carries its boundary verdict with `UNVERIFIED` state. A missing prerequisite receipt also produces the same boundary-specific unverified result. CI invokes each helper and verifies the state/verdict pair. The runtime refuses to interpret an upstream `UNVERIFIED` or `FAIL` receipt as a downstream pass.
+Combines change classes, repository policy, supported environments, and release context into obligations. It is deterministic and policy-versioned. A model cannot add/remove mandatory obligations at runtime.
 
-## Falsification tests
+### Verification adapters
 
-- `test_reducibility_counterexamples_preserve_distinct_failure_modes` gives the marker, warning, import, version, build and SPDX checks independently varying evidence.
-- `test_no_evaluator_imports_another_evaluator` and `scripts/check_import_boundary.py` detect hidden evaluator import edges.
-- `test_cli_module_does_not_import_runtime_until_main_entry` verifies lazy CLI loading.
-- `test_notch_perturbation_uses_derived_tolerance` verifies the fixture has a measurable effect.
-- `test_each_boundary_has_an_explicit_degraded_verdict` forces all seven degraded states.
+Invoke specialist tools and controlled tests. They produce evidence, not final policy decisions. Each adapter declares versions, inputs, resource limits, output schema, timeout/failure semantics, and unsupported cases.
+
+### Evidence ledger
+
+Stores raw output or content-addressed references, normalized records, subject identity, tool/configuration, environment, trust, and relations. A first version can use local files and a small index. A graph database is not a prerequisite.
+
+### Policy evaluator
+
+Checks that mandatory obligations are satisfied by valid, trusted, fresh evidence for the exact subject. Missing, conflicting, stale, or untrusted evidence remains unresolved.
+
+### Dossier and status integration
+
+Produces a versioned machine-readable dossier and concise human summary. A GitHub status/check points to the exact dossier and commit; it is not the evidence source of truth.
+
+## Target contracts
+
+- ChangeSubject: immutable repository/revision/artifact identity.
+- ChangeSet: normalized changed paths/symbols, base/head relation, diff digest.
+- ImpactResult: analyzed scope, affected subjects, coverage, exclusions, analyzer identity.
+- Obligation: policy clause, applicability, required evidence, owner, waiver semantics.
+- EvidenceEnvelope: subject, producer, tool, inputs/outputs, raw reference, environment, trust, time.
+- Finding: issue, severity, confidence, location, supporting evidence, limitations.
+- DecisionRecord: policy digest, obligation results, exceptions, approvers, final decision, rationale.
+
+These are target contracts, not current Python data classes.
+
+## Storage and query strategy
+
+Start with content-addressed evidence objects, a versioned JSON schema, and a small relational/document index for subjects and relationships. Add graph indexing only when real queries, repository count, evidence volume, and retention needs justify it.
+
+## Execution and concurrency
+
+- Jobs are idempotent for a defined input tuple.
+- Cache keys include source/artifact digests, tool version, configuration digest, environment, policy version, and trust policy.
+- Decision-relevant input changes invalidate dependent evidence.
+- Jobs have timeouts, bounded retries, resource caps, and terminal states.
+- Duplicate events are deduplicated without losing rerun history.
+- PR head updates create new subjects and invalidate head-bound results.
+- Merge-queue validation uses the merge-group subject and correct workflow trigger.
+- The decision is recomputed when policy or required evidence changes.
+
+## Failure states
+
+Distinguish analyzer finding, unavailable, error, incomplete scan, invalid output, subject mismatch, stale evidence, untrusted producer, timeout, and not applicable. Unavailable or invalid required analysis cannot satisfy an obligation.
+
+## Extensibility and deferrals
+
+A language adapter declares semantics and blind spots. A CI adapter preserves native workflow identity. A policy pack is versioned and cannot reinterpret old evidence silently.
+
+Do not implement now: organization-wide graph infrastructure, runtime telemetry, autonomous remediation, hosted dashboard, arbitrary multi-provider CI, or generic multi-tenant SaaS.

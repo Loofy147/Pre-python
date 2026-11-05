@@ -1,46 +1,51 @@
-# Design rationale and adversarial review
+# Design rationale
 
-## Why seven evaluators remain separate
+## From a seven-boundary experiment to change assurance
 
-The seven boundaries consume different evidence and emit distinct failure modes: module identity, version ordering/specifier membership, marker truth, static type judgments, artifact metadata and payload facts, SPDX/file coverage, and warning chronology. A shared receipt envelope permits orchestration but does not collapse these verdicts into one score.
+The chipcup prototype organizes release checks around seven receipt boundaries. This was useful for experimenting with typed observations, degraded states, and multi-dimensional reports. It is not sufficient as a long-term product architecture.
 
-## Delta over existing tools
+A product organized only around formal-system categories risks adding modules without solving a distinct user problem. The teacup fixture remains valuable because a measured notch tolerance makes a regression test load-bearing; it is not the product identity.
 
-- Griffe reports API additions/removals; chipcup binds an API change to native warning observations and the exact wheel that ships the replacement.
-- mypy proves static typing judgments; chipcup additionally checks the declared stub set is physically present in the wheel and within the licence coverage evidence.
-- Twine validates distribution metadata; chipcup compares source/wheel payloads and joins the results to marker-selected warnings and API lifecycle state.
-- packaging implements PEP 440/508; chipcup retains version and marker decisions as linked receipts that select subsequent evidence checks.
+## Why change is the organizing subject
 
-## Reducibility counterexamples
+A software change links:
+- source/API compatibility;
+- dependency and license effects;
+- security boundaries;
+- tests and supported environments;
+- build artifacts and provenance;
+- release policy and human approval.
 
-- An identical marker matrix can have missing or emitted warning observations; marker truth does not encode deprecation chronology.
-- One module object can retain identity while its imported version violates a release specifier; import identity does not encode PEP 440 matching.
-- An identical archive member list can have different SPDX expressions; build inventory does not encode licence semantics.
-- A passing SPDX declaration can coexist with a missing stub file; licence resolution does not prove a typed API exists.
-- A passing type contract can coexist with a false platform marker; typing does not encode environment evaluation.
-- An identical release schedule can coexist with two different module identities; PEP 387-style chronology does not encode import cache identity.
-- A passing version specifier can describe an artifact whose sdist/wheel metadata diverges; PEP 440 does not encode PEP 517 build consistency.
+The user workflow is concrete: before a change is merged or released, what is affected, what must be verified, and what remains unknown?
 
-These are testable counterexamples, not a claim that the governing PEPs mandate chipcup's software decomposition.
+## Why not another code reviewer
 
-## Geometry as a load-bearing fixture
+AI review tools already identify issues and suggest fixes. Rebuilding one duplicates findings and does not solve evidence identity or policy replay. Consume their outputs and focus on whether required obligations were satisfied for the actual subject.
 
-The golden fixture is not a metaphor. `fixtures/chip.dat` contains measured rim and notch coordinates. The golden depth is 2.40 mm, and five percent of that depth gives a 0.12 mm tolerance. Source, sdist and wheel payloads are checked against the same golden coordinates. CI proves that a 0.05 mm perturbation remains in tolerance and a 0.13 mm perturbation fails.
+## Why not a universal graph first
 
-## License paradox
+A graph represents relationships; it does not guarantee that edges are correct or evidence trusted. Existing code-intelligence and supply-chain graph tools cover adjacent territory. Start with typed records and explicit edges. Add graph storage only after query, scale, and retention needs justify it.
 
-PEP 639's archive-level `License-Expression` cannot by itself express a separate per-file grant. The distribution remains MIT. A supplemental SPDX `LicenseRef-Fixture-Dual` record resolves to shipped text and identifies the fixture subject; CI validates both the License-File and subject path in both artifacts. This is project metadata, not a claim that the core metadata field scopes expressions to paths.
+## Why not an agent-first product
 
-## Breaking-change boundary
+Agents are probabilistic and can be influenced by malicious repository content. They may investigate or propose patches, but cannot control policy or certify their own changes. The trusted core must make subject resolution, obligation compilation, evidence validation, and policy evaluation replayable.
 
-The version floor and the marker environment can be changed without renaming a symbol. A new release can raise a dependency specifier while a PEP 508 row controls which supported environment receives that dependency. The stable public name remains available through the compatibility window.
+## Why Python first
 
-## Weakest edge and likely collapse
+The current code and tests provide a Python release-assurance experiment with concrete defects to close. Python-first creates one reference workflow. It does not prove language-neutral design; a second-language pilot must test that assumption.
 
-The weakest edge is licenses → types: an archive-level distribution expression may be too coarse to answer a future organization’s file-level policy. The typed evaluator therefore requires an explicit stub manifest and a verified license receipt before considering contract sets available.
+## Why an assurance case
 
-The most likely collapse is deprecations into versions. Both observe release chronology, but they differ whenever a warning shipped without being executed on a required target platform. A falsification test holds release history constant while varying native warning observations; if the deprecation verdict does not change, the boundary has no distinct operational value.
+No test suite or static analyzer proves arbitrary software correct. A structured dossier can show what was checked, why, against which subject, by which tool/environment, and with what limitations and exceptions. This is more precise than a universal proof or risk score.
 
-## Open-ended research question
+## Why coverage is explicit
 
-If a platform marker stops selecting an environment while its previously emitted warning remains in the release history, can the import evaluator safely expose a PEP 562 deprecated alias, or does the removal clock remain blocked by the PEP 387-informed project policy?
+Static dependency and API analysis cannot observe every dynamic behavior. If the system cannot establish its analysis scope, it must report partial/unknown coverage and trigger a conservative fallback rather than imply no impact.
+
+## Why test prioritization is optional
+
+Predictive selection can reduce feedback time, but selection errors can hide regressions. It may order checks or suggest additional tests. It cannot silently remove policy-required suites or certify full coverage.
+
+## Why the roadmap is gated
+
+The largest risk is building a broad system whose claims cannot be trusted and whose user value is unproven. Correctness, evidence identity, hostile-execution safety, comparative value, and adoption must precede multi-language support, runtime assurance, hosted graph infrastructure, and autonomous repair.
