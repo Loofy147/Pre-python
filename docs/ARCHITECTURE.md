@@ -34,6 +34,10 @@ The edges are runtime receipt dependencies, not evaluator imports. Each evaluato
 
 Each evaluator reports a named result: `BUILD_PROVENANCE`, `LICENSE_COVERAGE`, `TYPE_SURFACE`, `MARKER_MATRIX`, `DEPRECATION_WINDOW`, `IMPORT_AUDIT` and `VERSION_HISTORY`. A receipt state is `PASS`, `FAIL`, `UNVERIFIED` or `NOT_APPLICABLE`. Missing evidence is never silently promoted to PASS. All named boundary and fixture verdicts are members of `chipcup._contracts.AuditVerdict`, a closed `str` enum; `BoundaryReceipt` rejects unregistered strings and serializes the enum's stable value.
 
+### Process exit selection
+
+`chipcup.exit_codes` maps every required receipt state to a stable integer exit code. It does not overwrite the receipt state or the JSON verdict. The precedence order is a named, tested tuple and is deliberately independent of integer ordering. `PASS` and `NOT_APPLICABLE` are non-fatal; `FAIL`, `UNVERIFIED`, and a missing required receipt are non-zero. A build receipt without isolation evidence has its own fatal exit, and fixture geometry failures have a distinct code from general artifact divergence.
+
 ## Build and fixture geometry
 
 The build evaluator inspects an sdist and wheel without extracting them. It compares project identity, version, `Requires-Dist`, package names, public exports, licence metadata and backend/version provenance. It reads `fixtures/chip.dat` from the source, sdist and wheel.

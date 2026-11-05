@@ -5,9 +5,10 @@ import json
 from pathlib import Path
 
 from chipcup.cli import main
+from chipcup.exit_codes import ExitCode
 
 
-def test_missing_runtime_module_returns_exit_code_three(
+def test_missing_runtime_module_returns_a_dedicated_exit_code(
     monkeypatch, capsys, tmp_path: Path
 ):
     original_import = builtins.__import__
@@ -37,5 +38,5 @@ def test_missing_runtime_module_returns_exit_code_three(
     )
 
     payload = json.loads(capsys.readouterr().out)
-    assert code == 3
+    assert code == int(ExitCode.MODULE_NOT_FOUND)
     assert payload["failure"] == "module-not-found"
