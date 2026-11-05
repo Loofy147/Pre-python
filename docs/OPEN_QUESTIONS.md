@@ -1,14 +1,14 @@
-# Open questions for maintainers
+# Open questions
 
-These questions are deliberately open-ended. They describe decisions that need evidence, not checkboxes with predetermined answers.
+1. Should license-to-stub policy be expanded from distribution-level MIT coverage to per-path policy attestations, and what interoperable format should carry those attestations?
+2. What signed provenance should bind the uploaded wheel, sdist, source commit, build backend and release tag?
+3. Which platforms and extras are required for each public deprecated name, and what change-control process removes a row from that policy?
+4. Should the fixture's notch geometry be represented as raw measured coordinates only, or should the reference include an uncertainty model and instrument calibration?
+5. What evidence is sufficient to trust a third-party entry point discovered from a namespace package, and how is that trust revoked?
+6. Should offline SPDX validation vendor a versioned SPDX License List snapshot, or should it return UNVERIFIED when the list cannot be refreshed?
+7. Which additional API compatibility semantics need to be tested beyond literal `__all__` comparison, including dynamic attributes and re-exports?
+8. How should prerelease and local-version policy interact with the release gate for projects that publish nightly artifacts?
 
-1. What evidence should be sufficient to trust a third-party plugin discovered through the PEP 420 namespace and entry-point mechanism, and how should that evidence be revoked?
-2. How should the package validate SPDX license identifiers against the evolving SPDX License List without making offline builds dependent on a network lookup?
-3. When a LicenseRef is introduced, what documentation and file-level evidence should be required before a release can claim complete license coverage?
-4. Which release-history source should become authoritative if tags, package-index versions and signed attestations disagree?
-5. Under what conditions should a deprecation be soft rather than regular, and what observable evidence should justify keeping it indefinitely?
-6. How should dynamic PEP 517 metadata be admitted without allowing the sdist and wheel to describe different projects?
-7. Which properties should a type-audit receipt prove, and how can the build backend verify its provenance without pretending that static typing proves runtime safety?
-8. What additional tests would falsify the claim that the seven contracts remain non-reducible in a future Python packaging environment?
-9. Which compatibility guarantees should become stable before the package leaves alpha status?
-10. What should constitute a trustworthy first-party release when a GitHub artifact, package-index artifact and source tag are not byte-identical?
+## Deprecation marker question
+
+If an API's warning was emitted on a platform that a later marker matrix no longer selects, the old observation remains evidence that the warning executed on that platform in that release. It does not automatically prove that the platform remains a required compatibility target. The project must decide whether the platform remains in its supported set; if it does, the warning observation must be retained and the removal window must satisfy the policy for that required row. If it does not, a documented matrix-policy change is required. An unselected row is never silently counted as a successful observation.

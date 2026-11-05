@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chipcup"
 version = "0.1.0"
-description = "A typed Python packaging-boundary laboratory with seven executable formal-system boundaries."
+description = "A typed Python packaging auditor with seven executable formal-system boundaries."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "LICENSES/Fixture-Dual.txt"]
 authors = [{ name = "chipcup contributors" }]
 keywords = ["python-packaging", "pep-440", "pep-508", "spdx", "typing", "build"]
 classifiers = [
@@ -25,10 +25,16 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
-dependencies = ["packaging>=24.2"]
+dependencies = [
+  "packaging>=24.2",
+  "tomli>=2; python_version < '3.11'",
+]
 
 [project.optional-dependencies]
 test = ["build>=1.2.2", "mypy>=1.13", "pytest>=8.3", "twine>=6.1"]
+
+[project.scripts]
+"chipcup.audit" = "chipcup.cli:main"
 
 [project.entry-points."chipcup.plugins"]
 demo = "chipcup.plugins.demo:DemoPlugin"
@@ -39,7 +45,10 @@ include = ["chipcup*"]
 namespaces = true
 
 [tool.setuptools.package-data]
-chipcup = ["py.typed"]
+chipcup = ["py.typed", "stub-contracts.json", "stubs/*.pyi"]
+
+[tool.setuptools.data-files]
+"chipcup/fixtures" = ["fixtures/chip.dat", "fixtures/golden-profile.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -48,4 +57,7 @@ addopts = "-ra"
 [tool.mypy]
 python_version = "3.10"
 strict = true
+disallow_any_explicit = true
+enable_error_code = ["ignore-without-code"]
+warn_unused_ignores = true
 files = ["src/chipcup"]

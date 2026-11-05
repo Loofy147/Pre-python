@@ -1,0 +1,30 @@
+[
+  {
+    "name": "linux",
+    "expression": "sys_platform == 'linux'",
+    "stub_set": "posix",
+    "version_specifier": ">=0.1.0,<1.0.0",
+    "environment": {"sys_platform": "linux", "platform_system": "Linux"}
+  },
+  {
+    "name": "windows",
+    "expression": "sys_platform == 'win32'",
+    "stub_set": "windows",
+    "version_specifier": ">=0.1.0,<1.0.0",
+    "environment": {"sys_platform": "win32", "platform_system": "Windows"}
+  },
+  {
+    "name": "macos",
+    "expression": "sys_platform == 'darwin'",
+    "stub_set": "posix",
+    "version_specifier": ">=0.1.0,<1.0.0",
+    "environment": {"sys_platform": "darwin", "platform_system": "Darwin"}
+  },
+  {
+    "name": "gpu-extra",
+    "expression": "extra == 'gpu'",
+    "stub_set": "gpu",
+    "version_specifier": ">=0.1.0,<1.0.0",
+    "extra": "gpu"
+  }
+]

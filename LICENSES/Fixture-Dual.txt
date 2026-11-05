@@ -1,0 +1,28 @@
+CHIPCUP FIXTURE DUAL LICENSE
+SPDX identifier: LicenseRef-Fixture-Dual
+
+Scope
+-----
+This custom license grant applies only to the reference data file
+fixtures/chip.dat. It does not change the MIT license covering the chipcup
+Python package, its source code, its tests, or its documentation.
+
+Grant
+-----
+The fixture is offered, at the recipient's option, under either:
+  1. the MIT License; or
+  2. the Apache License, Version 2.0.
+
+A recipient choosing the MIT option must comply with the MIT License. A
+recipient choosing the Apache option must comply with Apache License 2.0,
+including its applicable notice, attribution, patent, and redistribution
+conditions. The recipient need comply with only the selected option for this
+fixture. No option is imposed on the rest of the chipcup distribution.
+
+The complete standard license texts are published at:
+  MIT: https://opensource.org/license/mit
+  Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+This file is the complete custom grant describing the fixture's alternative
+licensing. The SPDX LicenseRef identifies this grant; it is not a mechanism
+for embedding an SPDX expression inside another SPDX expression.

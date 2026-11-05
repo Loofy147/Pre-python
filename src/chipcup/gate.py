@@ -1,154 +1,201 @@
-"""Fail-closed release gate coordinating the seven formal-system boundaries."""
+"""Ordered seven-boundary distribution audit with a multi-sorted report."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import importlib
+from dataclasses import asdict, dataclass, field
+from importlib.metadata import version as installed_distribution_version
 from pathlib import Path
+from types import ModuleType
 from typing import Mapping
+
+from chipcup.build import (
+    ArtifactComparison,
+    compare_artifacts,
+    inspect_artifact,
+)
+from chipcup.deprecations import (
+    DeprecationAuditResult,
+    DeprecationSchedule,
+    WarningObservation,
+    validate_schedules,
+)
+from chipcup.imports import ImportAudit, audit_module
+from chipcup.licenses import (
+    DEFAULT_LICENSE_REFS,
+    LicenseAuditResult,
+    validate_compatibility,
+)
+from chipcup.markers import MarkerMatrixResult, MarkerRow, evaluate_matrix
+from chipcup.types import TypeAuditResult, audit_public_surface
+from chipcup.versions import VersionAudit, VersionPolicy
+
+__all__ = ["GateReport", "GateRequest", "evaluate_release"]
+
+_DEFAULT_DEPRECATIONS = (
+    DeprecationSchedule(
+        public_name="legacy_parse_version",
+        removal_release=None,
+        required_matrix_rows=("linux", "windows", "macos"),
+    ),
+)
 
 
 @dataclass(frozen=True, slots=True)
 class GateRequest:
     sdist_path: Path
     wheel_path: Path
-    audit_receipt: object
     project_root: Path = Path(".")
-    module_name: str = "chipcup"
+    package_name: str = "chipcup"
     version_specifier: str = ">=0.1.0,<1.0.0"
-    marker: str = 'python_version >= "3.10"'
-    extras: tuple[str, ...] = ()
+    marker_rows: tuple[MarkerRow, ...] = (
+        MarkerRow(
+            "linux",
+            "sys_platform == 'linux'",
+            "posix",
+            environment={"sys_platform": "linux"},
+        ),
+        MarkerRow(
+            "windows",
+            "sys_platform == 'win32'",
+            "windows",
+            environment={"sys_platform": "win32"},
+        ),
+        MarkerRow(
+            "macos",
+            "sys_platform == 'darwin'",
+            "posix",
+            environment={"sys_platform": "darwin"},
+        ),
+        MarkerRow("gpu-extra", 'extra == "gpu"', "gpu", extra="gpu"),
+    )
     environment: Mapping[str, str] = field(default_factory=dict)
-    license_expression: str = "MIT"
-    license_files: tuple[str, ...] = ("LICENSE",)
-    license_refs: Mapping[str, str] = field(default_factory=dict)
-    deprecations: tuple[object, ...] = ()
-    published_releases: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class GateStep:
-    boundary: str
-    passed: bool
-    detail: str
+    license_refs: Mapping[str, str] = field(
+        default_factory=lambda: dict(DEFAULT_LICENSE_REFS)
+    )
+    deprecations: tuple[DeprecationSchedule, ...] = _DEFAULT_DEPRECATIONS
+    published_releases: tuple[str, ...] = ("0.1.0",)
+    warning_observations: tuple[WarningObservation, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class GateReport:
-    passed: bool
-    steps: tuple[GateStep, ...]
+    imports: ImportAudit
+    versions: VersionAudit
+    markers: MarkerMatrixResult
+    types: TypeAuditResult
+    build: ArtifactComparison
+    licenses: LicenseAuditResult
+    deprecations: DeprecationAuditResult
+    sdist_sha256: str
+    wheel_sha256: str
 
     @property
-    def failed_boundary(self) -> str | None:
-        for step in self.steps:
-            if not step.passed:
-                return step.boundary
-        return None
+    def passed(self) -> bool:
+        """Convenience gate, not a replacement for the typed boundary results."""
+        return all(
+            result.passed
+            for result in (
+                self.imports,
+                self.versions,
+                self.markers,
+                self.types,
+                self.build,
+                self.licenses,
+                self.deprecations,
+            )
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "passed": self.passed,
+            "imports": asdict(self.imports),
+            "versions": asdict(self.versions),
+            "markers": asdict(self.markers),
+            "types": asdict(self.types),
+            "build": asdict(self.build),
+            "licenses": asdict(self.licenses),
+            "deprecations": asdict(self.deprecations),
+            "artifacts": {
+                "sdist_sha256": self.sdist_sha256,
+                "wheel_sha256": self.wheel_sha256,
+            },
+        }
+
+
+def _audit_modules(package_name: str) -> Mapping[str, ModuleType]:
+    names = (
+        package_name,
+        f"{package_name}.imports",
+        f"{package_name}.versions",
+        f"{package_name}.markers",
+        f"{package_name}.types",
+        f"{package_name}.build",
+        f"{package_name}.licenses",
+        f"{package_name}.deprecations",
+    )
+    return {name: importlib.import_module(name) for name in names}
 
 
 def evaluate_release(request: GateRequest) -> GateReport:
-    """Run each policy in order and stop at the first failed boundary."""
-    steps: list[GateStep] = []
+    """Run each formal-system audit and preserve its own result structure."""
+    import_result = audit_module(request.package_name)
+    package_module = importlib.import_module(request.package_name)
 
-    def fail(boundary: str, error: Exception) -> GateReport:
-        steps.append(GateStep(boundary, False, str(error)))
-        return GateReport(False, tuple(steps))
+    installed = installed_distribution_version(request.package_name)
+    imported = getattr(package_module, "__version__")
+    version_policy = VersionPolicy(request.version_specifier)
+    version_result = version_policy.audit_distribution(
+        str(imported), installed, specifier=request.version_specifier
+    )
 
-    try:
-        from chipcup.imports import load_module, module_identity
+    selected_rows = version_policy.select_matrix_rows(
+        version_result.installed, request.marker_rows
+    )
+    marker_result = evaluate_matrix(
+        selected_rows, environment=request.environment
+    )
 
-        module = load_module(request.module_name)
-        identity = module_identity(request.module_name)
-        steps.append(GateStep(
-            "imports", True,
-            f"{identity.name} object={identity.object_id} origin={identity.origin}"
-        ))
-    except Exception as error:
-        return fail("imports", error)
+    # The type verdict consumes the actual wheel's exported surface. Artifact
+    # inspection is performed here as evidence collection; the build verdict
+    # itself follows the typed-surface check.
+    sdist = inspect_artifact(request.sdist_path)
+    wheel = inspect_artifact(request.wheel_path)
+    modules = _audit_modules(request.package_name)
+    type_result = audit_public_surface(
+        modules, wheel.public_exports, marker_result.selected_stub_sets
+    )
 
-    try:
-        from chipcup.versions import VersionPolicy
+    build_result = compare_artifacts(sdist, wheel)
 
-        version = getattr(module, "__version__")
-        policy = VersionPolicy(request.version_specifier)
-        if not policy.accepts(version):
-            raise ValueError(
-                f"package version {version!r} does not satisfy {request.version_specifier!r}"
-            )
-        steps.append(GateStep("versions", True, f"{version} satisfies {request.version_specifier}"))
-    except Exception as error:
-        return fail("versions", error)
+    expression = wheel.license_expression or ""
+    license_result = validate_compatibility(
+        expression,
+        {"sdist": sdist.members, "wheel": wheel.members},
+        wheel.license_files,
+        root=request.project_root,
+        license_refs=request.license_refs,
+        deprecations=request.deprecations,
+    )
 
-    try:
-        from chipcup.markers import MarkerPolicy
+    deprecation_result = validate_schedules(
+        request.deprecations,
+        request.published_releases,
+        request.warning_observations,
+        row_platforms={
+            row.name: row.environment.get("sys_platform", "")
+            for row in selected_rows
+        },
+    )
 
-        marker_policy = MarkerPolicy(request.marker, extras=request.extras)
-        if not marker_policy.evaluate(request.environment):
-            raise ValueError(f"environment does not satisfy marker {request.marker!r}")
-        steps.append(GateStep("markers", True, request.marker))
-    except Exception as error:
-        return fail("markers", error)
-
-    try:
-        from chipcup.types import AuditReceipt, prepare_build_receipt
-
-        if not isinstance(request.audit_receipt, AuditReceipt):
-            raise TypeError("audit receipt does not satisfy the structural protocol")
-        evidence = prepare_build_receipt(request.audit_receipt)
-        steps.append(GateStep("types", True, f"accepted source digest {evidence.source_digest}"))
-    except Exception as error:
-        return fail("types", error)
-
-    try:
-        from chipcup.build import compare_artifacts, inspect_artifact
-
-        sdist = inspect_artifact(request.sdist_path)
-        wheel = inspect_artifact(request.wheel_path)
-        name, artifact_version = compare_artifacts(sdist, wheel)
-        if artifact_version != version:
-            raise ValueError(
-                f"artifact version {artifact_version!r} differs from package version {version!r}"
-            )
-        steps.append(GateStep(
-            "build", True,
-            f"{name} {artifact_version}; sdist={sdist.sha256}; wheel={wheel.sha256}"
-        ))
-    except Exception as error:
-        return fail("build", error)
-
-    try:
-        from chipcup.build import require_license_coverage
-        from chipcup.licenses import validate_compatibility
-
-        for artifact in (sdist, wheel):
-            missing = require_license_coverage(artifact, request.license_files)
-            if missing:
-                raise ValueError(
-                    f"{artifact.kind} missing license files: {', '.join(missing)}"
-                )
-        validate_compatibility(
-            request.license_expression,
-            {"sdist": sdist.members, "wheel": wheel.members},
-            request.license_files,
-            root=request.project_root,
-            license_refs=request.license_refs,
-            deprecations=request.deprecations,
-            published_releases=request.published_releases,
-        )
-        steps.append(GateStep(
-            "licenses", True, f"SPDX syntax and file coverage: {request.license_expression}"
-        ))
-    except Exception as error:
-        return fail("licenses", error)
-
-    try:
-        from chipcup.deprecations import validate_schedules
-
-        validate_schedules(request.deprecations, request.published_releases)
-        steps.append(GateStep(
-            "deprecations", True,
-            f"validated {len(request.deprecations)} deprecation schedule(s)"
-        ))
-    except Exception as error:
-        return fail("deprecations", error)
-
-    return GateReport(True, tuple(steps))
+    return GateReport(
+        imports=import_result,
+        versions=version_result,
+        markers=marker_result,
+        types=type_result,
+        build=build_result,
+        licenses=license_result,
+        deprecations=deprecation_result,
+        sdist_sha256=sdist.sha256,
+        wheel_sha256=wheel.sha256,
+    )
