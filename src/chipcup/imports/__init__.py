@@ -22,6 +22,8 @@ __all__ = [
     "discover_compatible_entry_points",
     "load_module",
     "module_identity",
+    "degraded_receipt",
+    "receipt_from_deprecations",
 ]
 
 

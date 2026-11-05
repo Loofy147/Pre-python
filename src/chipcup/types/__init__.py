@@ -23,6 +23,8 @@ __all__ = [
     "is_any",
     "load",
     "prepare_build_receipt",
+    "degraded_receipt",
+    "receipt_from_license",
 ]
 
 T_co = TypeVar("T_co", covariant=True)
@@ -164,7 +166,10 @@ def receipt_from_license(
         sets = manifest.get("contract_sets")
         if not isinstance(sets, dict) or not sets:
             raise ValueError("stub contract manifest has no contract sets")
-        wheel_members = set(str(item) for item in license_receipt.evidence["wheel_members"])
+        raw_wheel_members = license_receipt.evidence.get("wheel_members")
+        if not isinstance(raw_wheel_members, list):
+            raise ValueError("license receipt has no wheel manifest")
+        wheel_members = set(str(item) for item in raw_wheel_members)
         contracts: dict[str, list[str]] = {}
         missing: list[str] = []
         for name, paths in sets.items():

@@ -20,6 +20,8 @@ __all__ = [
     "MarkerPolicy",
     "MarkerRow",
     "evaluate_matrix",
+    "degraded_receipt",
+    "receipt_from_types",
 ]
 
 
@@ -118,7 +120,10 @@ def receipt_from_types(
         )
     try:
         version = Version(candidate_version)
-        available_sets = set(type_receipt.evidence["contract_sets"])
+        raw_sets = type_receipt.evidence.get("contract_sets")
+        if not isinstance(raw_sets, dict):
+            raise ValueError("type receipt has no contract-set manifest")
+        available_sets = set(str(name) for name in raw_sets)
         in_scope = tuple(
             row for row in rows
             if SpecifierSet(row.version_specifier).contains(version)

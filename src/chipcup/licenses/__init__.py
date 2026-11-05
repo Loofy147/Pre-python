@@ -19,6 +19,8 @@ __all__ = [
     "license_references",
     "parse_license_expression",
     "validate_compatibility",
+    "degraded_receipt",
+    "receipt_from_build",
 ]
 
 _TOKEN = re.compile(
@@ -314,11 +316,16 @@ def receipt_from_build(
         )
     evidence = build_receipt.evidence
     try:
+        raw_sdist = evidence.get("sdist_members")
+        raw_wheel = evidence.get("wheel_members")
+        raw_files = evidence.get("license_files")
+        if not all(isinstance(item, list) for item in (raw_sdist, raw_wheel, raw_files)):
+            raise ValueError("build receipt does not contain complete archive manifests")
         members = {
-            "sdist": tuple(str(item) for item in evidence["sdist_members"]),  # type: ignore[index]
-            "wheel": tuple(str(item) for item in evidence["wheel_members"]),  # type: ignore[index]
+            "sdist": tuple(str(item) for item in raw_sdist),
+            "wheel": tuple(str(item) for item in raw_wheel),
         }
-        files = tuple(str(item) for item in evidence["license_files"])  # type: ignore[index]
+        files = tuple(str(item) for item in raw_files)
         result = validate_compatibility(
             str(evidence["license_expression"]),
             members,

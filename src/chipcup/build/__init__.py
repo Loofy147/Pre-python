@@ -30,6 +30,12 @@ __all__ = [
     "compare_artifacts",
     "inspect_artifact",
     "require_license_coverage",
+    "close_version_cycle",
+    "degraded_receipt",
+    "evaluate_artifact_receipt",
+    "measure_notch",
+    "read_artifact_member",
+    "validate_notch_profile",
 ]
 
 

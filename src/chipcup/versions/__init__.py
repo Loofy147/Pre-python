@@ -10,7 +10,9 @@ from packaging.version import InvalidVersion, Version
 
 from chipcup._contracts import BoundaryReceipt, MatrixRow as MarkerRow, ReceiptState, unavailable
 
-__all__ = ["VersionAudit", "VersionPolicy", "parse_version"]
+__all__ = ["VersionAudit", "VersionPolicy", "parse_version"    "degraded_receipt",
+    "receipt_from_imports",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +114,7 @@ def receipt_from_imports(
                 "imported and installed versions differ or installed version violates the specifier",
             ),
         )
-    except (ImportError, InvalidVersion, ValueError, Exception) as error:
+    except Exception as error:
         return BoundaryReceipt(
             "versions", "VERSION_HISTORY", ReceiptState.FAIL, {},
             (f"version identity could not be verified: {type(error).__name__}: {error}",),
