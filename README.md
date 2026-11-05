@@ -37,7 +37,7 @@ Exit codes: **0** means every required verdict is verified; **1** means a failed
 | `imports` | PEP 420/562 and `sys.modules` | namespace resolution, public names, canonical module identity and alias state |
 | `versions` | PEP 440 | imported/installed version equality, ordering and specifier membership |
 
-Each receipt has its own named verdict and one of `PASS`, `FAIL`, `UNVERIFIED` or `NOT_APPLICABLE`. Unverified evidence never counts as passing. The JSON report retains the evidence per boundary; it does not compress unlike results into a score.
+Each receipt has its own named verdict and one of `PASS`, `FAIL`, `UNVERIFIED` or `NOT_APPLICABLE`. Unverified evidence never counts as passing. The JSON report retains the evidence per boundary; it does not compress unlike results into a score. Every named verdict is a member of the closed `AuditVerdict(str, Enum)` vocabulary, and each boundary exposes a distinct degradation helper.
 
 ## Load-bearing golden fixture
 
