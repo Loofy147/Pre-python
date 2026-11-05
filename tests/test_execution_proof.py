@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import json
 import subprocess
 import sys
@@ -69,6 +70,28 @@ def test_each_boundary_has_an_explicit_degraded_verdict():
         assert isinstance(receipt.verdict, AuditVerdict)
         assert receipt.verdict is degraded_operation_matrix()[key]
         assert receipt.to_dict()["verdict"] == receipt.verdict.value
+
+
+def test_subpackage_public_surfaces_are_disjoint_and_complete():
+    packages = (
+        "build", "licenses", "types", "markers",
+        "deprecations", "imports", "versions",
+    )
+    owner_by_name: dict[str, str] = {}
+    for package in packages:
+        module = importlib.import_module(f"chipcup.{package}")
+        for name in module.__all__:
+            assert name not in owner_by_name, (
+                f"public name {name!r} is exported by both "
+                f"{owner_by_name.get(name)!r} and {package!r}"
+            )
+            owner_by_name[name] = package
+    assert owner_by_name["BuildEvidence"] == "types"
+    assert {
+        "VersionAudit", "VersionPolicy", "parse_version",
+        "degraded_receipt", "receipt_from_imports",
+    }.issubset(set(importlib.import_module("chipcup.versions").__all__))
+    assert not hasattr(importlib.import_module("chipcup.build"), "BuildEvidence")
 
 
 def test_boundary_verdict_vocabulary_is_closed_and_serialization_stable():
