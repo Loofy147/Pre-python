@@ -133,3 +133,46 @@ def test_absent_build_is_not_promoted_to_a_pass():
     receipt = receipt_from_build(None, root=ROOT)
     assert receipt.state is ReceiptState.UNVERIFIED
     assert receipt.verdict == "LICENSE_COVERAGE"
+
+
+def test_missing_predecessor_receipt_forces_boundary_specific_unverified(tmp_path):
+    from chipcup.build import evaluate_artifact_receipt
+    from chipcup.deprecations import receipt_from_markers
+    from chipcup.imports import receipt_from_deprecations
+    from chipcup.licenses import receipt_from_build
+    from chipcup.markers import receipt_from_types
+    from chipcup.types import receipt_from_license
+    from chipcup.versions import receipt_from_imports
+
+    results = {
+        "build": evaluate_artifact_receipt(
+            sdist_path=tmp_path / "absent.tar.gz",
+            wheel_path=tmp_path / "absent.whl",
+            project_root=tmp_path,
+        ),
+        "licenses": receipt_from_build(None, root=tmp_path),
+        "types": receipt_from_license(None, root=tmp_path),
+        "markers": receipt_from_types(
+            None, rows=(), candidate_version="0.1.0"
+        ),
+        "deprecations": receipt_from_markers(
+            None, observations=(), published_releases=(), row_platforms={}
+        ),
+        "imports": receipt_from_deprecations(None),
+        "versions": receipt_from_imports(
+            None, version_specifier=">=0", package_name="chipcup"
+        ),
+    }
+    expected = {
+        "build": "BUILD_PROVENANCE",
+        "licenses": "LICENSE_COVERAGE",
+        "types": "TYPE_SURFACE",
+        "markers": "MARKER_MATRIX",
+        "deprecations": "DEPRECATION_WINDOW",
+        "imports": "IMPORT_AUDIT",
+        "versions": "VERSION_HISTORY",
+    }
+    assert set(results) == set(expected)
+    for boundary, receipt in results.items():
+        assert receipt.state is ReceiptState.UNVERIFIED
+        assert receipt.verdict == expected[boundary]
