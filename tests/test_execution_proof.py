@@ -87,6 +87,13 @@ def test_subpackage_public_surfaces_are_disjoint_and_complete():
             )
             owner_by_name[name] = package
     assert owner_by_name["BuildEvidence"] == "types"
+    expected_degraded_helpers = {
+        "degraded_build_receipt", "degraded_license_receipt",
+        "degraded_type_receipt", "degraded_marker_receipt",
+        "degraded_deprecation_receipt", "degraded_import_receipt",
+        "degraded_version_receipt",
+    }
+    assert expected_degraded_helpers.issubset(owner_by_name)
     assert {
         "VersionAudit", "VersionPolicy", "parse_version",
         "degraded_receipt", "receipt_from_imports",
