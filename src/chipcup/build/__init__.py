@@ -19,13 +19,12 @@ import json
 import math
 
 from chipcup._contracts import (
-    AuditReceipt, AuditVerdict, BoundaryReceipt, BuildEvidence, ReceiptState, unavailable,
+    AuditReceipt, AuditVerdict, BoundaryReceipt, BuildEvidence as _BuildEvidence, ReceiptState, unavailable,
 )
 
 __all__ = [
     "ArtifactComparison",
     "ArtifactInfo",
-    "BuildEvidence",
     "accept_type_receipt",
     "compare_artifacts",
     "inspect_artifact",
@@ -83,7 +82,7 @@ class ArtifactComparison:
         )
 
 
-def accept_type_receipt(receipt: object) -> BuildEvidence:
+def accept_type_receipt(receipt: object) -> _BuildEvidence:
     if not isinstance(receipt, AuditReceipt):
         raise TypeError("build requires an AuditReceipt")
     digest = receipt.source_digest
@@ -95,7 +94,7 @@ def accept_type_receipt(receipt: object) -> BuildEvidence:
         raise ValueError("source_digest is not hexadecimal") from error
     if receipt.passed is not True:
         raise ValueError("failed type audit cannot enter the build boundary")
-    return BuildEvidence(source_digest=digest.lower(), passed=True)
+    return _BuildEvidence(source_digest=digest.lower(), passed=True)
 
 
 def _metadata_info(data: bytes) -> tuple[
