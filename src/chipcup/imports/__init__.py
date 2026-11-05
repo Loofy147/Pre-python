@@ -22,7 +22,7 @@ __all__ = [
     "discover_compatible_entry_points",
     "load_module",
     "module_identity",
-    "degraded_receipt",
+    "degraded_import_receipt",
     "receipt_from_deprecations",
 ]
 
@@ -157,5 +157,5 @@ def receipt_from_deprecations(
         )
 
 
-def degraded_receipt() -> BoundaryReceipt:
+def degraded_import_receipt() -> BoundaryReceipt:
     return unavailable("imports", AuditVerdict.IMPORT_AUDIT, "deprecation receipt or import target is unavailable")
