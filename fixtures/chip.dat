@@ -1,5 +1,14 @@
-CHIPCUP_FIXTURE_V1
-OBJECT=CHIPPED_TEACUP
-EDGE=CHIPPED
-SURFACE=GLAZED
-REFERENCE_ONLY=1
+{
+  "schema": "chipcup-rim-profile/v1",
+  "object": "teacup",
+  "unit": "mm",
+  "rim": {
+    "left": [-3.0, 12.0],
+    "right": [3.0, 12.0]
+  },
+  "notch": {
+    "left": [-0.4, 12.0],
+    "apex": [0.0, 9.6],
+    "right": [0.4, 12.0]
+  }
+}

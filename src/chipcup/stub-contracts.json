@@ -1,0 +1,10 @@
+{
+  "schema": "chipcup-stub-contracts/v1",
+  "distribution_license": "MIT",
+  "contract_sets": {
+    "base": ["stubs/base.pyi"],
+    "posix": ["stubs/posix.pyi"],
+    "windows": ["stubs/windows.pyi"],
+    "gpu": ["stubs/gpu.pyi"]
+  }
+}
