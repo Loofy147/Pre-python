@@ -4,9 +4,12 @@ import ast
 import json
 import subprocess
 import sys
-from pathlib import Path
 
-from chipcup._contracts import ReceiptState, unavailable
+import pytest
+from pathlib import Path
+from typing import cast
+
+from chipcup._contracts import AuditVerdict, BoundaryReceipt, ReceiptState, unavailable
 from chipcup.build import measure_notch, validate_notch_profile
 from chipcup.runtime import degraded_operation_matrix
 
@@ -63,7 +66,25 @@ def test_each_boundary_has_an_explicit_degraded_verdict():
     assert set(actual) == set(degraded_operation_matrix())
     for key, receipt in actual.items():
         assert receipt.state is ReceiptState.UNVERIFIED
-        assert receipt.verdict == degraded_operation_matrix()[key]
+        assert isinstance(receipt.verdict, AuditVerdict)
+        assert receipt.verdict is degraded_operation_matrix()[key]
+        assert receipt.to_dict()["verdict"] == receipt.verdict.value
+
+
+def test_boundary_verdict_vocabulary_is_closed_and_serialization_stable():
+    expected = {
+        "BUILD_PROVENANCE", "BUILD_RELEASE_IDENTITY", "LICENSE_COVERAGE",
+        "TYPE_SURFACE", "MARKER_MATRIX", "DEPRECATION_WINDOW",
+        "IMPORT_AUDIT", "VERSION_HISTORY",
+        "FIXTURE_GEOMETRY_WITHIN_TOLERANCE",
+        "FIXTURE_GEOMETRY_OUT_OF_TOLERANCE",
+    }
+    assert {item.value for item in AuditVerdict} == expected
+    assert isinstance(AuditVerdict.BUILD_PROVENANCE, str)
+    with pytest.raises(TypeError, match="verdict must be an AuditVerdict member"):
+        BoundaryReceipt(
+            "probe", cast(AuditVerdict, "UNREGISTERED"), ReceiptState.FAIL
+        )
 
 
 def test_no_evaluator_imports_another_evaluator():
