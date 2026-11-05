@@ -36,7 +36,7 @@ Each evaluator reports a named result: `BUILD_PROVENANCE`, `LICENSE_COVERAGE`, `
 
 ### Process exit selection
 
-`chipcup.exit_codes` maps every required receipt state to a stable integer exit code. It does not overwrite the receipt state or the JSON verdict. The precedence order is a named, tested tuple and is deliberately independent of integer ordering. `PASS` and `NOT_APPLICABLE` are non-fatal; `FAIL`, `UNVERIFIED`, and a missing required receipt are non-zero. A build receipt without isolation evidence has its own fatal exit, and fixture geometry failures have a distinct code from general artifact divergence.
+`chipcup.exit_codes` maps every required receipt state to a stable integer exit code. It does not overwrite the receipt state or the JSON verdict. The precedence order is a named, tested tuple and is deliberately independent of integer ordering. In lowest-to-highest order it is `AUDIT_ERROR`, `AUDIT_UNVERIFIED`, `DEPRECATION_UNPROVEN`, `TYPE_SURFACE_INVALID`, `MARKER_MATRIX_INVALID`, `IMPORT_AUDIT_FAILED`, `VERSION_MISMATCH`, `BUILD_RELEASE_IDENTITY`, `BUILD_DIVERGENT`, `LICENSE_UNRESOLVED`, `FIXTURE_GEOMETRY`, then `BUILD_UNAVAILABLE`. The last applicable condition wins. `PASS` and `NOT_APPLICABLE` are non-fatal; `FAIL`, `UNVERIFIED`, and a missing required receipt are non-zero. A build receipt without isolation evidence has its own fatal exit, and fixture geometry failures have a distinct code from general artifact divergence.
 
 ## Build and fixture geometry
 

@@ -4,7 +4,7 @@
 
 Closest tools remain useful:
 - **Griffe** compares Python API surfaces; chipcup adds native warning chronology and binds it to exact built artifacts.
-- **mypy** checks static typing; chipcup verifies that the declared stub contract files are present in the shipped wheel and have licence coverage.
+- **mypy** checks static typing; chipcup verifies that the declared stub contract files are present in the exact wheel and have licence coverage.
 - **Twine** validates distribution metadata presentation; chipcup additionally compares the sdist and wheel payloads and evaluates the API lifecycle.
 - **packaging** evaluates PEP 440 versions and PEP 508 markers; chipcup preserves those results as evidence linked to warning and artifact receipts.
 
@@ -28,7 +28,7 @@ The JSON report remains multi-sorted: every boundary keeps its own verdict, stat
 | Exit | Meaning |
 |---:|---|
 | 0 | Every required receipt is verified (`PASS` or `NOT_APPLICABLE`) |
-| 1 | Unexpected audit/runtime error |
+| 1 | Unexpected audit/runtime error or malformed receipt state |
 | 2 | Required deprecation warning was not observed on every selected platform row |
 | 3 | SPDX expression, LicenseRef mapping or shipped license coverage failed |
 | 4 | Golden fixture is missing, malformed or outside its geometry tolerance |
@@ -42,7 +42,11 @@ The JSON report remains multi-sorted: every boundary keeps its own verdict, stat
 | 12 | Required audit module could not be imported |
 | 13 | A required receipt is missing or remains unverified |
 
-When several fatal results coexist, `chipcup.exit_codes.EXIT_PRECEDENCE` defines the total order; the later entry wins. This order is explicit and independent of numeric code order. Missing receipts never count as success. The JSON report is printed before the selected exit is returned.
+When multiple fatal outcomes coexist, the later entry wins in this **lowest-to-highest precedence order**:
+
+`AUDIT_ERROR (1) < AUDIT_UNVERIFIED (13) < DEPRECATION_UNPROVEN (2) < TYPE_SURFACE_INVALID (5) < MARKER_MATRIX_INVALID (8) < IMPORT_AUDIT_FAILED (9) < VERSION_MISMATCH (10) < BUILD_RELEASE_IDENTITY (11) < BUILD_DIVERGENT (6) < LICENSE_UNRESOLVED (3) < FIXTURE_GEOMETRY (4) < BUILD_UNAVAILABLE (7)`.
+
+The order is explicit and intentionally independent of numeric exit-code order. Missing receipts never count as success. The JSON report is printed before the selected exit is returned. The mapping and precedence are implemented in `chipcup.exit_codes` and exercised by unit and CLI tests.
 
 ## Seven receipt boundaries
 
