@@ -54,7 +54,7 @@ PEP 387 describes CPython's compatibility policy. chipcup's third-party project 
 
 ## Degraded operation
 
-Every evaluator exports `degraded_receipt()`. The result is its named verdict with `UNVERIFIED` state. A missing prerequisite receipt also produces the same boundary-specific unverified result. CI invokes each degraded function and verifies the state/verdict pair. The runtime refuses to interpret an upstream `UNVERIFIED` or `FAIL` receipt as a downstream pass.
+Each evaluator exports a uniquely named degraded receipt helper: `degraded_build_receipt`, `degraded_license_receipt`, `degraded_type_receipt`, `degraded_marker_receipt`, `degraded_deprecation_receipt`, `degraded_import_receipt` and `degraded_version_receipt`. Each result carries its boundary verdict with `UNVERIFIED` state. A missing prerequisite receipt also produces the same boundary-specific unverified result. CI invokes each helper and verifies the state/verdict pair. The runtime refuses to interpret an upstream `UNVERIFIED` or `FAIL` receipt as a downstream pass.
 
 ## Falsification tests
 
