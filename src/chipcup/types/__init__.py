@@ -23,7 +23,7 @@ __all__ = [
     "is_any",
     "load",
     "prepare_build_receipt",
-    "degraded_receipt",
+    "degraded_type_receipt",
     "receipt_from_license",
 ]
 
@@ -203,5 +203,5 @@ def receipt_from_license(
         )
 
 
-def degraded_receipt() -> BoundaryReceipt:
+def degraded_type_receipt() -> BoundaryReceipt:
     return unavailable("types", AuditVerdict.TYPE_SURFACE, "license receipt or typed stub manifest is unavailable")
