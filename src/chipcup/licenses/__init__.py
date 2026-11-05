@@ -19,7 +19,7 @@ __all__ = [
     "license_references",
     "parse_license_expression",
     "validate_compatibility",
-    "degraded_receipt",
+    "degraded_license_receipt",
     "receipt_from_build",
 ]
 
@@ -359,5 +359,5 @@ def receipt_from_build(
         )
 
 
-def degraded_receipt() -> BoundaryReceipt:
+def degraded_license_receipt() -> BoundaryReceipt:
     return unavailable("licenses", AuditVerdict.LICENSE_COVERAGE, "build manifest is unavailable")
