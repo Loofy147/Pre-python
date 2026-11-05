@@ -39,8 +39,11 @@ def artifact_pair(tmp_path: Path) -> tuple[Path, Path]:
     sdist = tmp_path / f"{DIST}.tar.gz"
     wheel = tmp_path / f"{DIST}-py3-none-any.whl"
     source_files = sorted(SRC.rglob("*.py"))
+    package_data_files = sorted(
+        [*SRC.rglob("*.pyi"), *SRC.rglob("*.json")]
+    )
     with tarfile.open(sdist, "w:gz") as archive:
-        for source in source_files:
+        for source in [*source_files, *package_data_files]:
             relative = source.relative_to(ROOT)
             name = f"{DIST}/{relative.as_posix()}"
             content = source.read_bytes()
@@ -57,6 +60,9 @@ def artifact_pair(tmp_path: Path) -> tuple[Path, Path]:
             f"{DIST}/fixtures/chip.dat": (
                 ROOT / "fixtures" / "chip.dat"
             ).read_bytes(),
+            f"{DIST}/fixtures/golden-profile.json": (
+                ROOT / "fixtures" / "golden-profile.json"
+            ).read_bytes(),
         }
         for name, content in extra_files.items():
             info = tarfile.TarInfo(name)
@@ -64,7 +70,7 @@ def artifact_pair(tmp_path: Path) -> tuple[Path, Path]:
             archive.addfile(info, BytesIO(content))
 
     with zipfile.ZipFile(wheel, "w") as archive:
-        for source in source_files:
+        for source in [*source_files, *package_data_files]:
             relative = source.relative_to(SRC)
             archive.writestr(f"chipcup/{relative.as_posix()}", source.read_bytes())
         archive.writestr("chipcup/py.typed", b"")
@@ -82,5 +88,9 @@ def artifact_pair(tmp_path: Path) -> tuple[Path, Path]:
         archive.writestr(
             "chipcup/fixtures/chip.dat",
             (ROOT / "fixtures" / "chip.dat").read_bytes(),
+        )
+        archive.writestr(
+            "chipcup/fixtures/golden-profile.json",
+            (ROOT / "fixtures" / "golden-profile.json").read_bytes(),
         )
     return sdist, wheel
