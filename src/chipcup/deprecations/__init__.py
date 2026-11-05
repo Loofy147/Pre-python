@@ -260,5 +260,5 @@ def receipt_from_markers(
     )
 
 
-def degraded_receipt() -> BoundaryReceipt:
+def degraded_deprecation_receipt() -> BoundaryReceipt:
     return unavailable("deprecations", AuditVerdict.DEPRECATION_WINDOW, "selected marker rows or native warning evidence are unavailable")
