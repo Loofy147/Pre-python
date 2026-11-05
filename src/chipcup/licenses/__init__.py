@@ -7,10 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from chipcup.deprecations import (
-    DeprecationSchedule,
-    validate_license_dependencies,
-)
+from chipcup._contracts import BoundaryReceipt, ReceiptState, unavailable
 
 __all__ = [
     "DEFAULT_LICENSE_REFS",
@@ -193,7 +190,7 @@ def validate_compatibility(
     root: str | Path,
     license_refs: Mapping[str, str] | None = None,
     license_ref_subjects: Mapping[str, Sequence[str]] | None = None,
-    deprecations: Sequence[DeprecationSchedule] = (),
+    deprecations: Sequence[object] = (),
 ) -> LicenseAuditResult:
     """Validate SPDX syntax, LicenseRef mapping and file coverage per artifact."""
     tree = parse_license_expression(expression)
@@ -264,7 +261,7 @@ def validate_compatibility(
                     f"{', '.join(missing_subjects)}"
                 )
 
-    dependency_issues = validate_license_dependencies(
+    dependency_issues = _validate_license_dependencies(
         deprecations, reference_map, declared
     )
     issues.extend(dependency_issues)
@@ -280,3 +277,76 @@ def validate_compatibility(
         missing_subject_artifact_files=missing_subject_artifacts,
         issues=tuple(issues),
     )
+
+def _validate_license_dependencies(
+    schedules: Sequence[object],
+    resolved_license_refs: Mapping[str, str],
+    declared_license_files: Sequence[str],
+) -> tuple[str, ...]:
+    issues: list[str] = []
+    declared = set(declared_license_files)
+    for schedule in schedules:
+        for reference in getattr(schedule, "required_license_refs", ()):
+            path = resolved_license_refs.get(reference)
+            if path is None:
+                issues.append(
+                    f"{getattr(schedule, 'public_name', 'schedule')}: unresolved license reference {reference}"
+                )
+            elif path not in declared:
+                issues.append(
+                    f"{getattr(schedule, 'public_name', 'schedule')}: {reference} maps to {path}, "
+                    "which is not declared as License-File"
+                )
+    return tuple(issues)
+
+
+def receipt_from_build(
+    build_receipt: BoundaryReceipt | None,
+    *,
+    root: str | Path,
+    license_refs: Mapping[str, str] | None = None,
+) -> BoundaryReceipt:
+    """Consume the actual archive manifest; never request a rebuild."""
+    if build_receipt is None or build_receipt.state is not ReceiptState.PASS:
+        return unavailable(
+            "licenses", "LICENSE_COVERAGE",
+            "verified build manifest is absent or not in PASS state",
+        )
+    evidence = build_receipt.evidence
+    try:
+        members = {
+            "sdist": tuple(str(item) for item in evidence["sdist_members"]),  # type: ignore[index]
+            "wheel": tuple(str(item) for item in evidence["wheel_members"]),  # type: ignore[index]
+        }
+        files = tuple(str(item) for item in evidence["license_files"])  # type: ignore[index]
+        result = validate_compatibility(
+            str(evidence["license_expression"]),
+            members,
+            files,
+            root=root,
+            license_refs=license_refs,
+            deprecations=(),
+        )
+        coverage = {
+            "sdist_members": list(members["sdist"]),
+            "wheel_members": list(members["wheel"]),
+            "license_files": list(files),
+            "license_ref_subjects": {
+                key: list(value) for key, value in result.reference_subjects.items()
+            },
+            "covered_paths": list(files),
+        }
+        return BoundaryReceipt(
+            "licenses", "LICENSE_COVERAGE",
+            ReceiptState.PASS if result.passed else ReceiptState.FAIL,
+            coverage, result.issues,
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        return BoundaryReceipt(
+            "licenses", "LICENSE_COVERAGE", ReceiptState.FAIL, {},
+            (f"license manifest cannot be consumed: {error}",),
+        )
+
+
+def degraded_receipt() -> BoundaryReceipt:
+    return unavailable("licenses", "LICENSE_COVERAGE", "build manifest is unavailable")

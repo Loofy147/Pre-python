@@ -8,7 +8,10 @@ from dataclasses import dataclass, field
 from importlib.metadata import EntryPoint, entry_points
 from types import ModuleType
 
-from chipcup.versions import VersionPolicy
+from packaging.specifiers import SpecifierSet
+from packaging.version import InvalidVersion, Version
+
+from chipcup._contracts import BoundaryReceipt, ReceiptState, unavailable
 
 __all__ = [
     "EntryPointRef",
@@ -103,13 +106,54 @@ def discover_compatible_entry_points(
     version_specifier: str = ">=0",
 ) -> tuple[EntryPointRef, ...]:
     """Filter entry points by distribution version without importing targets."""
-    policy = VersionPolicy(version_specifier)
+    policy = SpecifierSet(version_specifier)
     refs: list[EntryPointRef] = []
     for point in entry_points().select(group=group):
         distribution = point.dist
         version = distribution.version if distribution is not None else None
-        if version is not None and policy.accepts(version):
+        try:
+            accepted = version is not None and policy.contains(Version(version))
+        except InvalidVersion:
+            accepted = False
+        if accepted:
             refs.append(
                 EntryPointRef(group, point.name, point.value, version, point)
             )
     return tuple(sorted(refs, key=lambda item: item.name))
+
+def receipt_from_deprecations(
+    deprecation_receipt: BoundaryReceipt | None,
+    *,
+    module_name: str = "chipcup",
+) -> BoundaryReceipt:
+    """Validate import identity only after the removal policy is verified."""
+    if deprecation_receipt is None or deprecation_receipt.state is not ReceiptState.PASS:
+        return unavailable(
+            "imports", "IMPORT_AUDIT",
+            "deprecation policy receipt is absent or unresolved",
+        )
+    try:
+        result = audit_module(module_name)
+        evidence = {
+            "module": module_name,
+            "object_id": result.identity.object_id,
+            "origin": result.identity.origin or "",
+            "namespace_locations": list(result.identity.namespace_locations),
+            "same_object_on_repeat_import": result.same_object_on_repeat_import,
+            "public_names": list(result.public_names),
+        }
+        return BoundaryReceipt(
+            "imports", "IMPORT_AUDIT",
+            ReceiptState.PASS if result.passed else ReceiptState.FAIL,
+            evidence,
+            tuple("unresolved public import name: " + item for item in result.unresolved_public_names),
+        )
+    except (ImportError, AttributeError, ModuleNotFoundError) as error:
+        return BoundaryReceipt(
+            "imports", "IMPORT_AUDIT", ReceiptState.FAIL, {},
+            (f"{type(error).__name__}: {error}",),
+        )
+
+
+def degraded_receipt() -> BoundaryReceipt:
+    return unavailable("imports", "IMPORT_AUDIT", "deprecation receipt or import target is unavailable")

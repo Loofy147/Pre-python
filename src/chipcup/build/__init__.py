@@ -15,8 +15,12 @@ from typing import Iterable, Mapping
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
-from chipcup.licenses import check_artifact_license_coverage
-from chipcup.types import AuditReceipt
+import json
+import math
+
+from chipcup._contracts import (
+    AuditReceipt, BoundaryReceipt, BuildEvidence, ReceiptState, unavailable,
+)
 
 __all__ = [
     "ArtifactComparison",
@@ -27,13 +31,6 @@ __all__ = [
     "inspect_artifact",
     "require_license_coverage",
 ]
-
-
-@dataclass(frozen=True, slots=True)
-class BuildEvidence:
-    source_digest: str
-    passed: bool
-    receipt_kind: str = "typing-audit"
 
 
 @dataclass(frozen=True, slots=True)
@@ -404,8 +401,269 @@ def compare_artifacts(sdist: ArtifactInfo, wheel: ArtifactInfo) -> ArtifactCompa
     )
 
 
+def check_artifact_license_coverage(
+    members: Iterable[str], license_files: Iterable[str]
+) -> tuple[str, ...]:
+    paths = tuple(member.replace("\\\\", "/").lstrip("./") for member in members)
+    missing: list[str] = []
+    for filename in license_files:
+        target = filename.replace("\\\\", "/").lstrip("./")
+        basename = Path(target).name
+        if not any(
+            member == target
+            or member.endswith("/" + target)
+            or member.endswith(".dist-info/licenses/" + basename)
+            for member in paths
+        ):
+            missing.append(filename)
+    return tuple(missing)
+
+
 def require_license_coverage(
     artifact: ArtifactInfo, license_files: Iterable[str] | None = None
 ) -> tuple[str, ...]:
     declared = artifact.license_files if license_files is None else tuple(license_files)
     return check_artifact_license_coverage(artifact.members, declared)
+
+
+def read_artifact_member(path: str | Path, suffix: str) -> bytes:
+    """Read one named payload from an sdist or wheel without extracting it."""
+    artifact = Path(path)
+    normalized_suffix = suffix.replace("\\\\", "/").lstrip("./")
+    if artifact.name.endswith(".whl"):
+        with zipfile.ZipFile(artifact) as archive:
+            candidates = [
+                name for name in archive.namelist()
+                if name.replace("\\\\", "/").endswith(normalized_suffix)
+            ]
+            if len(candidates) != 1:
+                raise ValueError(
+                    f"{artifact.name} must contain exactly one {normalized_suffix}"
+                )
+            return archive.read(candidates[0])
+    with tarfile.open(artifact, "r:*") as archive:
+        candidates = [
+            member for member in archive.getmembers()
+            if member.isfile()
+            and member.name.replace("\\\\", "/").endswith(normalized_suffix)
+        ]
+        if len(candidates) != 1:
+            raise ValueError(
+                f"{artifact.name} must contain exactly one {normalized_suffix}"
+            )
+        stream = archive.extractfile(candidates[0])
+        if stream is None:
+            raise ValueError(f"cannot read {normalized_suffix} from {artifact.name}")
+        return stream.read()
+
+
+def _point(value: object, label: str) -> tuple[float, float]:
+    if (
+        not isinstance(value, list)
+        or len(value) != 2
+        or not all(isinstance(item, (int, float)) for item in value)
+    ):
+        raise ValueError(f"{label} must be a two-coordinate millimetre point")
+    return float(value[0]), float(value[1])
+
+
+def _profile_points(document: Mapping[str, object]) -> tuple[
+    tuple[float, float], tuple[float, float],
+    tuple[float, float], tuple[float, float], tuple[float, float]
+]:
+    if document.get("schema") != "chipcup-rim-profile/v1":
+        raise ValueError("fixture schema must be chipcup-rim-profile/v1")
+    if document.get("unit") != "mm":
+        raise ValueError("fixture geometry unit must be mm")
+    rim = document.get("rim")
+    notch = document.get("notch")
+    if not isinstance(rim, dict) or not isinstance(notch, dict):
+        raise ValueError("fixture must contain rim and notch geometry")
+    return (
+        _point(rim.get("left"), "rim.left"),
+        _point(rim.get("right"), "rim.right"),
+        _point(notch.get("left"), "notch.left"),
+        _point(notch.get("apex"), "notch.apex"),
+        _point(notch.get("right"), "notch.right"),
+    )
+
+
+def measure_notch(profile: bytes | str) -> dict[str, float]:
+    """Measure notch depth and derive the allowed geometric deviation."""
+    decoded = json.loads(profile.decode("utf-8") if isinstance(profile, bytes) else profile)
+    if not isinstance(decoded, dict):
+        raise ValueError("fixture profile must be a JSON object")
+    left, right, notch_left, apex, notch_right = _profile_points(decoded)
+    if right[0] == left[0]:
+        raise ValueError("rim reference line must have non-zero horizontal span")
+    fraction = 0.05
+    baseline_y = left[1] + (right[1] - left[1]) * (
+        (apex[0] - left[0]) / (right[0] - left[0])
+    )
+    depth = baseline_y - apex[1]
+    if depth <= 0:
+        raise ValueError("notch apex must be below the rim reference line")
+    return {
+        "notch_depth_mm": depth,
+        "notch_width_mm": notch_right[0] - notch_left[0],
+        "tolerance_mm": depth * fraction,
+    }
+
+
+def validate_notch_profile(
+    profile: bytes | str, golden: Mapping[str, object]
+) -> dict[str, object]:
+    """Compare all three notch points against the golden geometry.
+
+    The tolerance is five percent of the golden notch depth. For the shipped
+    2.40 mm notch this is 0.12 mm.
+    """
+    decoded = json.loads(profile.decode("utf-8") if isinstance(profile, bytes) else profile)
+    if not isinstance(decoded, dict):
+        raise ValueError("fixture profile must be a JSON object")
+    expected_document = dict(golden)
+    expected_document["schema"] = "chipcup-rim-profile/v1"
+    expected = _profile_points(expected_document)
+    actual = _profile_points(decoded)
+    rim_left, rim_right = expected[0], expected[1]
+    apex_x = expected[3][0]
+    if rim_right[0] == rim_left[0]:
+        raise ValueError("golden rim reference line must have non-zero span")
+    expected_rim_y = rim_left[1] + (rim_right[1] - rim_left[1]) * (
+        (apex_x - rim_left[0]) / (rim_right[0] - rim_left[0])
+    )
+    expected_depth = expected_rim_y - expected[3][1]
+    fraction = golden.get("tolerance_fraction_of_notch_depth", 0.05)
+    if not isinstance(fraction, (int, float)) or fraction <= 0:
+        raise ValueError("golden tolerance fraction must be positive")
+    tolerance = expected_depth * float(fraction)
+    deviations = tuple(
+        math.hypot(found[0] - target[0], found[1] - target[1])
+        for found, target in zip(actual[2:], expected[2:])
+    )
+    maximum = max(deviations)
+    return {
+        "passed": maximum <= tolerance,
+        "verdict": (
+            "FIXTURE_GEOMETRY_WITHIN_TOLERANCE"
+            if maximum <= tolerance
+            else "FIXTURE_GEOMETRY_OUT_OF_TOLERANCE"
+        ),
+        "expected_notch_depth_mm": expected_depth,
+        "tolerance_mm": tolerance,
+        "maximum_point_deviation_mm": maximum,
+        "point_deviations_mm": list(deviations),
+    }
+
+
+def evaluate_artifact_receipt(
+    *,
+    sdist_path: str | Path,
+    wheel_path: str | Path,
+    project_root: str | Path,
+    build_isolation_verified: bool = True,
+) -> BoundaryReceipt:
+    """Create the build manifest receipt consumed by licenses."""
+    root = Path(project_root)
+    sdist = Path(sdist_path)
+    wheel = Path(wheel_path)
+    if not sdist.is_file() or not wheel.is_file():
+        return unavailable(
+            "build", "BUILD_PROVENANCE",
+            "required sdist or wheel is absent; artifact provenance was not checked",
+        )
+    try:
+        source_profile = (root / "fixtures" / "chip.dat").read_bytes()
+        golden_bytes = (root / "fixtures" / "golden-profile.json").read_bytes()
+        golden = json.loads(golden_bytes.decode("utf-8"))
+        if not isinstance(golden, dict) or golden.get("schema") != "chipcup-golden-profile/v1":
+            raise ValueError("golden profile schema is invalid")
+        source_geometry = validate_notch_profile(source_profile, golden)
+        sdist_profile = read_artifact_member(sdist, "fixtures/chip.dat")
+        wheel_profile = read_artifact_member(wheel, "fixtures/chip.dat")
+        sdist_golden = read_artifact_member(sdist, "fixtures/golden-profile.json")
+        wheel_golden = read_artifact_member(wheel, "fixtures/golden-profile.json")
+        golden_consistent = (
+            json.loads(sdist_golden.decode("utf-8")) == golden
+            and json.loads(wheel_golden.decode("utf-8")) == golden
+        )
+        geometries = {
+            "source": source_geometry,
+            "sdist": validate_notch_profile(sdist_profile, golden),
+            "wheel": validate_notch_profile(wheel_profile, golden),
+        }
+        sdist_info = inspect_artifact(sdist)
+        wheel_info = inspect_artifact(wheel)
+        comparison = compare_artifacts(sdist_info, wheel_info)
+        issues: list[str] = []
+        if not comparison.passed:
+            issues.append("sdist/wheel metadata, exports, or backend provenance differ")
+        if not golden_consistent:
+            issues.append("golden geometry reference differs across source and archives")
+        for location, verdict in geometries.items():
+            if not verdict["passed"]:
+                issues.append(
+                    f"{location} fixture notch exceeds {verdict['tolerance_mm']} mm tolerance"
+                )
+        evidence: dict[str, object] = {
+            "version": sdist_info.version,
+            "name": sdist_info.name,
+            "sdist_sha256": sdist_info.sha256,
+            "wheel_sha256": wheel_info.sha256,
+            "sdist_members": list(sdist_info.members),
+            "wheel_members": list(wheel_info.members),
+            "license_expression": wheel_info.license_expression or "",
+            "license_files": list(wheel_info.license_files),
+            "top_level_names": list(wheel_info.top_level_names),
+            "public_exports": {
+                name: list(names) for name, names in wheel_info.public_exports.items()
+            },
+            "geometry": geometries,
+            "golden_reference_consistent": golden_consistent,
+            "build_backend": sdist_info.build_backend or "",
+            "build_isolation_verified": build_isolation_verified,
+        }
+        if not build_isolation_verified:
+            return BoundaryReceipt(
+                "build", "BUILD_PROVENANCE", ReceiptState.UNVERIFIED,
+                evidence, tuple(issues + [
+                    "build isolation was unavailable; shipped artifacts were inspected but provenance is unverified"
+                ]),
+            )
+        return BoundaryReceipt(
+            "build", "BUILD_PROVENANCE",
+            ReceiptState.FAIL if issues else ReceiptState.PASS,
+            evidence, tuple(issues),
+        )
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
+        return BoundaryReceipt(
+            "build", "BUILD_PROVENANCE", ReceiptState.FAIL, {},
+            (f"{type(error).__name__}: {error}",),
+        )
+
+
+def close_version_cycle(
+    build_receipt: BoundaryReceipt | None,
+    version_receipt: BoundaryReceipt | None,
+) -> BoundaryReceipt:
+    """Close versions→build only when both upstream receipts are verified."""
+    if build_receipt is None or version_receipt is None:
+        return unavailable("build", "BUILD_RELEASE_IDENTITY", "version or build receipt is absent")
+    if build_receipt.state is not ReceiptState.PASS or version_receipt.state is not ReceiptState.PASS:
+        return unavailable(
+            "build", "BUILD_RELEASE_IDENTITY",
+            "upstream version or artifact evidence is not verified",
+        )
+    artifact_version = str(build_receipt.evidence.get("version", ""))
+    installed_version = str(version_receipt.evidence.get("installed_version", ""))
+    matches = bool(artifact_version and artifact_version == installed_version)
+    return BoundaryReceipt(
+        "build", "BUILD_RELEASE_IDENTITY",
+        ReceiptState.PASS if matches else ReceiptState.FAIL,
+        {"artifact_version": artifact_version, "installed_version": installed_version},
+        () if matches else ("installed metadata version differs from built artifact version",),
+    )
+
+
+def degraded_receipt() -> BoundaryReceipt:
+    return unavailable("build", "BUILD_PROVENANCE", "build inputs or provenance evidence are unavailable")

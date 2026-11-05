@@ -6,8 +6,13 @@ from dataclasses import dataclass, field
 from typing import Mapping, Sequence, cast
 
 from packaging.markers import Marker, default_environment
+from packaging.specifiers import SpecifierSet
+from packaging.version import InvalidVersion, Version
 
-from chipcup.types import AuditReceipt, accepts_protocol
+from chipcup._contracts import (
+    AuditReceipt, BoundaryReceipt, MatrixRow as MarkerRow,
+    ReceiptState, unavailable,
+)
 
 __all__ = [
     "MarkerEvaluation",
@@ -16,16 +21,6 @@ __all__ = [
     "MarkerRow",
     "evaluate_matrix",
 ]
-
-
-@dataclass(frozen=True, slots=True)
-class MarkerRow:
-    name: str
-    expression: str
-    stub_set: str
-    version_specifier: str = ">=0"
-    environment: Mapping[str, str] = field(default_factory=dict)
-    extra: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +79,13 @@ class MarkerPolicy:
         return self.evaluate(environment) and accepts_protocol(candidate, protocol)
 
 
+def accepts_protocol(candidate: object, protocol: type[object]) -> bool:
+    try:
+        return isinstance(candidate, protocol)
+    except TypeError:
+        return False
+
+
 def evaluate_matrix(
     rows: Sequence[MarkerRow],
     *,
@@ -101,3 +103,60 @@ def evaluate_matrix(
             MarkerEvaluation(row.name, row.expression, result, row.stub_set, log_line)
         )
     return MarkerMatrixResult(tuple(evaluations))
+
+def receipt_from_types(
+    type_receipt: BoundaryReceipt | None,
+    *,
+    rows: Sequence[MarkerRow],
+    candidate_version: str,
+) -> BoundaryReceipt:
+    """Select only marker rows permitted by PEP 440 and typed contracts."""
+    if type_receipt is None or type_receipt.state is not ReceiptState.PASS:
+        return unavailable(
+            "markers", "MARKER_MATRIX",
+            "verified type-contract receipt is absent",
+        )
+    try:
+        version = Version(candidate_version)
+        available_sets = set(type_receipt.evidence["contract_sets"])
+        in_scope = tuple(
+            row for row in rows
+            if SpecifierSet(row.version_specifier).contains(version)
+        )
+        result = evaluate_matrix(in_scope)
+        unknown = tuple(
+            row.stub_set for row in in_scope if row.stub_set not in available_sets
+        )
+        if unknown:
+            return BoundaryReceipt(
+                "markers", "MARKER_MATRIX", ReceiptState.FAIL,
+                {"evaluations": [item.log_line for item in result.evaluations]},
+                ("marker rows selected unknown type contract sets: " + ", ".join(unknown),),
+            )
+        if not result.selected_rows:
+            return BoundaryReceipt(
+                "markers", "MARKER_MATRIX", ReceiptState.UNVERIFIED,
+                {"evaluations": [item.log_line for item in result.evaluations]},
+                ("no marker row was selected; platform coverage is unverified",),
+            )
+        return BoundaryReceipt(
+            "markers", "MARKER_MATRIX", ReceiptState.PASS,
+            {
+                "selected_rows": list(result.selected_rows),
+                "selected_stub_sets": list(result.selected_stub_sets),
+                "evaluations": [item.log_line for item in result.evaluations],
+                "row_platforms": {
+                    row.name: str(row.environment.get("sys_platform", ""))
+                    for row in in_scope
+                },
+            },
+        )
+    except (InvalidVersion, ValueError, TypeError, KeyError) as error:
+        return BoundaryReceipt(
+            "markers", "MARKER_MATRIX", ReceiptState.FAIL, {},
+            (f"marker matrix cannot be evaluated: {type(error).__name__}: {error}",),
+        )
+
+
+def degraded_receipt() -> BoundaryReceipt:
+    return unavailable("markers", "MARKER_MATRIX", "typed stub contract receipt is unavailable")

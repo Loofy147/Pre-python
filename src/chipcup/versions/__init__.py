@@ -8,7 +8,7 @@ from typing import Sequence
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from chipcup.markers import MarkerRow
+from chipcup._contracts import BoundaryReceipt, MatrixRow as MarkerRow, ReceiptState, unavailable
 
 __all__ = ["VersionAudit", "VersionPolicy", "parse_version"]
 
@@ -75,3 +75,49 @@ class VersionPolicy:
         relation = 0 if imported == installed else (-1 if imported < installed else 1)
         accepted = VersionPolicy(specifier or self.specifier).accepts(installed)
         return VersionAudit(imported, installed, relation, specifier or self.specifier, accepted)
+
+def receipt_from_imports(
+    import_receipt: BoundaryReceipt | None,
+    *,
+    version_specifier: str,
+    package_name: str,
+) -> BoundaryReceipt:
+    """Order and constrain the release only after canonical import is verified."""
+    if import_receipt is None or import_receipt.state is not ReceiptState.PASS:
+        return unavailable(
+            "versions", "VERSION_HISTORY",
+            "canonical import receipt is absent or failed",
+        )
+    try:
+        from importlib import import_module
+        from importlib.metadata import version as installed_distribution_version
+
+        module = import_module(package_name)
+        imported = str(getattr(module, "__version__"))
+        installed = installed_distribution_version(package_name)
+        result = VersionPolicy(version_specifier).audit_distribution(
+            imported, installed, specifier=version_specifier
+        )
+        return BoundaryReceipt(
+            "versions", "VERSION_HISTORY",
+            ReceiptState.PASS if result.passed else ReceiptState.FAIL,
+            {
+                "imported_version": str(result.imported),
+                "installed_version": str(result.installed),
+                "order": result.order,
+                "specifier": result.specifier,
+                "specifier_matches": result.specifier_matches,
+            },
+            () if result.passed else (
+                "imported and installed versions differ or installed version violates the specifier",
+            ),
+        )
+    except (ImportError, InvalidVersion, ValueError, Exception) as error:
+        return BoundaryReceipt(
+            "versions", "VERSION_HISTORY", ReceiptState.FAIL, {},
+            (f"version identity could not be verified: {type(error).__name__}: {error}",),
+        )
+
+
+def degraded_receipt() -> BoundaryReceipt:
+    return unavailable("versions", "VERSION_HISTORY", "canonical import receipt or release metadata is unavailable")

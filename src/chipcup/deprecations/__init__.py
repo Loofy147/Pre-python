@@ -13,6 +13,8 @@ from typing import Callable, Mapping, Sequence
 
 from packaging.version import Version
 
+from chipcup._contracts import BoundaryReceipt, ReceiptState, unavailable
+
 __all__ = [
     "DeprecationAuditResult",
     "DeprecationSchedule",
@@ -213,3 +215,52 @@ def validate_schedules(
             )
 
     return DeprecationAuditResult(effective, missing_rows, tuple(issues))
+
+def receipt_from_markers(
+    marker_receipt: BoundaryReceipt | None,
+    *,
+    observations: Sequence[WarningObservation],
+    published_releases: Sequence[str],
+    row_platforms: Mapping[str, str],
+) -> BoundaryReceipt:
+    """Start removal clocks only from selected rows with real warning observations."""
+    if marker_receipt is None or marker_receipt.state is not ReceiptState.PASS:
+        return unavailable(
+            "deprecations", "DEPRECATION_WINDOW",
+            "selected marker matrix is absent or unverified",
+        )
+    selected = tuple(str(item) for item in marker_receipt.evidence.get("selected_rows", []))
+    required = tuple(
+        row for row in selected
+        if row_platforms.get(row) in {"linux", "win32", "darwin"}
+    )
+    if not required:
+        return unavailable(
+            "deprecations", "DEPRECATION_WINDOW",
+            "no supported native platform row was selected",
+        )
+    schedule = DeprecationSchedule(
+        public_name="legacy_parse_version",
+        removal_release=None,
+        required_matrix_rows=required,
+    )
+    result = validate_schedules(
+        (schedule,), published_releases, observations,
+        row_platforms={row: row_platforms[row] for row in required},
+    )
+    state = ReceiptState.PASS if result.passed else ReceiptState.FAIL
+    return BoundaryReceipt(
+        "deprecations", "DEPRECATION_WINDOW", state,
+        {
+            "required_rows": list(required),
+            "effective_warning_releases": dict(result.effective_warning_releases),
+            "missing_warning_rows": {
+                key: list(value) for key, value in result.missing_warning_rows.items()
+            },
+        },
+        result.issues,
+    )
+
+
+def degraded_receipt() -> BoundaryReceipt:
+    return unavailable("deprecations", "DEPRECATION_WINDOW", "selected marker rows or native warning evidence are unavailable")

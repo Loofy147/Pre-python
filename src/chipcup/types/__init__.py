@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Mapping, Protocol, TypeVar, runtime_checkable
+import json
+from pathlib import Path
+from typing import Any, Mapping, Protocol, TypeVar, runtime_checkable
 
-if TYPE_CHECKING:
-    from chipcup.build import BuildEvidence
+from chipcup._contracts import (
+    AuditReceipt, BoundaryReceipt, BuildEvidence, ReceiptState, unavailable,
+)
 
 __all__ = [
     "AuditReceipt",
@@ -28,17 +31,6 @@ T_co = TypeVar("T_co", covariant=True)
 class Reader(Protocol[T_co]):
     def read(self) -> T_co:
         """Return a value without mutating the reader."""
-
-
-@runtime_checkable
-class AuditReceipt(Protocol):
-    @property
-    def source_digest(self) -> str:
-        ...
-
-    @property
-    def passed(self) -> bool:
-        ...
 
 
 @runtime_checkable
@@ -77,16 +69,6 @@ STUB_SETS: Mapping[str, tuple[type[object], ...]] = {
     "windows": (WindowsStubContract, Reader),
     "gpu": (AuditReceipt, Reader),
 }
-
-
-def __getattr__(name: str) -> object:
-    """PEP 562 lazy re-export that breaks the types/build import-time cycle."""
-    if name == "BuildEvidence":
-        from chipcup.build import BuildEvidence
-
-        globals()[name] = BuildEvidence
-        return BuildEvidence
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def accepts_protocol(candidate: object, protocol: type[object]) -> bool:
@@ -148,13 +130,73 @@ def _reader_is_covariant() -> bool:
 
 
 def prepare_build_receipt(receipt: object) -> BuildEvidence:
-    """Resolve BuildEvidence through this module's PEP 562 __getattr__."""
+    """Validate a structural receipt using only the neutral contract."""
     if not isinstance(receipt, AuditReceipt):
         raise TypeError("receipt does not satisfy the AuditReceipt protocol")
-    from chipcup.types import BuildEvidence
-    from chipcup.build import accept_type_receipt
+    digest = receipt.source_digest
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise ValueError("source_digest must be a 64-character SHA-256 digest")
+    try:
+        int(digest, 16)
+    except ValueError as error:
+        raise ValueError("source_digest is not hexadecimal") from error
+    if receipt.passed is not True:
+        raise ValueError("failed type audit cannot enter the build boundary")
+    return BuildEvidence(source_digest=digest.lower(), passed=True)
 
-    evidence = accept_type_receipt(receipt)
-    if not isinstance(evidence, BuildEvidence):
-        raise TypeError("build returned an invalid BuildEvidence value")
-    return evidence
+
+def receipt_from_license(
+    license_receipt: BoundaryReceipt | None,
+    *,
+    root: str | Path,
+) -> BoundaryReceipt:
+    """Accept stub contracts only when their files are licensed and shipped."""
+    if license_receipt is None or license_receipt.state is not ReceiptState.PASS:
+        return unavailable(
+            "types", "TYPE_SURFACE",
+            "verified license receipt is absent; stub contract scope is unverified",
+        )
+    manifest_path = Path(root) / "src" / "chipcup" / "stub-contracts.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict) or manifest.get("schema") != "chipcup-stub-contracts/v1":
+            raise ValueError("stub contract manifest has an invalid schema")
+        sets = manifest.get("contract_sets")
+        if not isinstance(sets, dict) or not sets:
+            raise ValueError("stub contract manifest has no contract sets")
+        wheel_members = set(str(item) for item in license_receipt.evidence["wheel_members"])
+        contracts: dict[str, list[str]] = {}
+        missing: list[str] = []
+        for name, paths in sets.items():
+            if not isinstance(name, str) or not isinstance(paths, list):
+                raise ValueError("stub contract entries must be arrays of paths")
+            contracts[name] = []
+            for raw_path in paths:
+                if not isinstance(raw_path, str):
+                    raise ValueError("stub contract path must be a string")
+                package_path = "chipcup/" + raw_path.lstrip("/")
+                if package_path not in wheel_members:
+                    missing.append(package_path)
+                if not (Path(root) / "src" / "chipcup" / raw_path).is_file():
+                    missing.append("source:" + raw_path)
+                contracts[name].append(package_path)
+        if "chipcup/py.typed" not in wheel_members:
+            missing.append("chipcup/py.typed")
+        ok = not missing
+        return BoundaryReceipt(
+            "types", "TYPE_SURFACE",
+            ReceiptState.PASS if ok else ReceiptState.FAIL,
+            {"contract_sets": contracts, "wheel_stub_files": sorted(wheel_members.intersection(
+                path for paths in contracts.values() for path in paths
+            ))},
+            tuple("missing stub contract file: " + item for item in missing),
+        )
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        return BoundaryReceipt(
+            "types", "TYPE_SURFACE", ReceiptState.FAIL, {},
+            (f"stub contract audit failed: {type(error).__name__}: {error}",),
+        )
+
+
+def degraded_receipt() -> BoundaryReceipt:
+    return unavailable("types", "TYPE_SURFACE", "license receipt or typed stub manifest is unavailable")
