@@ -1,24 +1,14 @@
-# Open questions for maintainers
+# Open questions
 
-These questions describe evidence and policy decisions that remain open.
+1. Should license-to-stub policy be expanded from distribution-level MIT coverage to per-path policy attestations, and what interoperable format should carry those attestations?
+2. What signed provenance should bind the uploaded wheel, sdist, source commit, build backend and release tag?
+3. Which platforms and extras are required for each public deprecated name, and what change-control process removes a row from that policy?
+4. Should the fixture's notch geometry be represented as raw measured coordinates only, or should the reference include an uncertainty model and instrument calibration?
+5. What evidence is sufficient to trust a third-party entry point discovered from a namespace package, and how is that trust revoked?
+6. Should offline SPDX validation vendor a versioned SPDX License List snapshot, or should it return UNVERIFIED when the list cannot be refreshed?
+7. Which additional API compatibility semantics need to be tested beyond literal `__all__` comparison, including dynamic attributes and re-exports?
+8. How should prerelease and local-version policy interact with the release gate for projects that publish nightly artifacts?
 
-1. What evidence should be sufficient to trust a third-party plugin discovered through the PEP 420 namespace and entry-point mechanisms, and how should that evidence be revoked?
-2. How should chipcup validate SPDX identifiers against the evolving SPDX License List while preserving offline builds?
-3. What provenance should a supplemental LicenseRef mapping carry when a fixture's file-scoped grant changes independently of the distribution-level License-Expression?
-4. Which release-history source is authoritative when source tags, package-index versions, and signed attestations disagree?
-5. Which supported platforms and optional extras are required marker rows for each deprecated public name, and how are native CI observations retained and linked to a release?
-6. How should dynamic PEP 517 version metadata be admitted without allowing an sdist and wheel to describe different distributions?
-7. What properties must a type-audit receipt prove, and how can its provenance be checked without treating static typing as runtime-safety evidence?
-8. Which additional tests could falsify the claim that the seven boundaries still perform distinct work as Python packaging evolves?
-9. Which compatibility guarantees must be stable before chipcup leaves alpha?
-10. What evidence should bind a GitHub release artifact, a package-index artifact, its source tag, and any build attestation?
+## Deprecation marker question
 
-## Warning-window question
-
-**Question:** If a name's `DeprecationWarning` was only ever emitted on a platform the marker matrix never selected, does its removal window begin at the version that shipped the warning or the version that first evaluated the marker?
-
-**Current policy answer:** Neither. The release that merely shipped the warning is insufficient evidence, and evaluating a marker without executing the deprecated name is insufficient evidence. The warning clock begins only after the warning has actually been emitted on every required, selected marker row for that public name. The effective start is the latest of those first-observed releases.
-
-If a platform row was never selected, it contributes no warning evidence. If the row is required by the compatibility policy, removal remains blocked until that platform is selected and emits the warning. If the platform is not a supported target, the maintainer must explicitly remove it from the required matrix with a documented compatibility decision; the audit must not silently treat an unselected row as successful.
-
-This is a chipcup project policy informed by compatibility practice. PEP 387 itself is CPython's policy, not a third-party PyPI package mandate.
+If an API's warning was emitted on a platform that a later marker matrix no longer selects, the old observation remains evidence that the warning executed on that platform in that release. It does not automatically prove that the platform remains a required compatibility target. The project must decide whether the platform remains in its supported set; if it does, the warning observation must be retained and the removal window must satisfy the policy for that required row. If it does not, a documented matrix-policy change is required. An unselected row is never silently counted as a successful observation.

@@ -1,89 +1,61 @@
 # chipcup
 
-**chipcup** is a CI auditor for a Python distribution's public-API lifecycle. It evaluates seven packaging and compatibility systems in sequence and retains their results as a multi-sorted report. A report contains independent import, version, marker, typing, build, license, and deprecation evidence; it does not collapse those different verdicts into a numerical score.
+**chipcup audits Python distribution lifecycle evidence across seven independent systems.** It is designed for the gap between API-diff tools, static type checkers, archive validators and platform CI: no one of those tools alone proves that a removal was warned on every required platform, that the replacement stubs exist in the exact wheel, and that the shipped files have resolvable licence evidence.
 
-The reference fixture is deliberately small: [fixtures/chip.dat](fixtures/chip.dat). The chipped teacup is data used by the audit, not a second product metaphor.
+Closest tools remain useful:
+- **Griffe** compares Python API surfaces; chipcup adds native warning chronology and binds it to exact built artifacts.
+- **mypy** checks static typing; chipcup verifies that the declared stub contract files are present in the shipped wheel and have licence coverage.
+- **Twine** validates distribution metadata presentation; chipcup additionally compares the sdist and wheel payloads and evaluates the API lifecycle.
+- **packaging** evaluates PEP 440 versions and PEP 508 markers; chipcup preserves those results as evidence linked to warning and artifact receipts.
 
 ## Install and run
 
-For a source checkout:
-
 ```bash
-python -m pip install -e ".[test]"
-python -m pytest
-python -m mypy
-python -m build
-python -m twine check dist/*
-```
-
-Run the distribution audit after building an sdist and a wheel from that sdist:
-
-```bash
-python -m chipcup.cli \
-  --sdist dist/chipcup-0.1.0.tar.gz \
+python -m pip install "chipcup[test]"
+python -m chipcup.cli --sdist dist/chipcup-0.1.0.tar.gz \
   --wheel dist/chipcup-0.1.0-py3-none-any.whl \
   --matrix fixtures/audit-matrix.json \
-  --warning-evidence warning-evidence/ \
-  --project-root .
+  --warning-evidence warning-evidence/ --project-root .
 ```
 
-The `--warning-evidence` directory contains one JSON observation captured by each native platform job. It is required: marker simulations alone do not prove that a `DeprecationWarning` was emitted on a real target. The platform collector is `scripts/capture_warning_evidence.py`.
+The installed console command is `chipcup.audit`. Its module imports only the standard library until `main()` is entered. The entry point then lazily imports `chipcup.runtime`, which loads the seven evaluators and passes immutable receipts between them.
 
-The installed command is `chipcup.audit`. It returns exit code **0** when all boundaries pass, **1** when the audit fails or cannot establish a required contract, and **3** when a required module cannot be imported.
+Exit codes: **0** means every required verdict is verified; **1** means a failed or unverified required verdict; **3** means a required module could not be imported.
 
-The package requires Python 3.10 or newer and currently declares version `0.1.0` as an alpha implementation. The version is static in `pyproject.toml`; the audit checks that the imported `chipcup.__version__` equals `importlib.metadata.version("chipcup")`.
+## Seven receipt boundaries
 
-## The seven boundaries
+`build → licenses → types → markers → deprecations → imports → versions → build`
 
-| Subpackage | Governing system | Work performed |
+| Evaluator | Governing mechanism | Required evidence |
 |---|---|---|
-| `imports` | Python import machinery, PEP 420, PEP 562, `sys.modules` | Checks repeat-import object identity, declared public names, namespace-package behavior, and version-filtered entry-point discovery. |
-| `versions` | PEP 440 | Parses versions, checks specifiers, compares imported and installed distribution versions, and selects in-scope marker rows. PEP 440 versions have a total ordering; specifier matching is a predicate. |
-| `markers` | PEP 508 | Evaluates marker rows against explicit environments and requested extras. Each result records its row, Boolean verdict, stub set, and diagnostic line. |
-| `types` | PEP 484/544 and PEP 561 | Defines typed public contracts and a covariant generic protocol, identifies selected contract sets, and compares source `__all__` surfaces with exports found in the wheel. It uses Python 3.10-compatible `TypeVar` syntax; PEP 695 type-parameter syntax is deliberately not used while Python 3.10 remains supported. `py.typed` marks the package as typed. |
-| `build` | PEP 517/621 and Core Metadata | Inspects sdist/wheel metadata and contents; checks project identity, `Requires-Dist`, package names, literal `__all__` exports, license metadata, and static version provenance. |
-| `licenses` | PEP 639 and SPDX expression grammar | Parses the distribution's SPDX expression, checks declared license files in source/sdist/wheel, and resolves custom file-scoped LicenseRef evidence. |
-| `deprecations` | Project policy informed by PEP 387 | Records actual `DeprecationWarning` observations for selected marker rows and derives the effective warning start only after all required rows have emitted. |
+| `build` | PEP 517/621 | sdist/wheel metadata, contents, backend provenance, fixture geometry |
+| `licenses` | SPDX / PEP 639 | SPDX expression, declared License-Files, LicenseRef text and archive manifests |
+| `types` | PEP 484/544/695 and PEP 561 | variance, stub-contract manifest, wheel stub files, `py.typed` |
+| `markers` | PEP 508 | explicit environment and extra evaluations selecting only known contract sets |
+| `deprecations` | project policy informed by PEP 387 | actual `DeprecationWarning` observations for every selected required platform |
+| `imports` | PEP 420/562 and `sys.modules` | namespace resolution, public names, canonical module identity and alias state |
+| `versions` | PEP 440 | imported/installed version equality, ordering and specifier membership |
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the dependency graph and result types, and [docs/DESIGN_RATIONALE.md](docs/DESIGN_RATIONALE.md) for the boundary scene, counterfactual motivation, reducibility test, and falsification targets.
+Each receipt has its own named verdict and one of `PASS`, `FAIL`, `UNVERIFIED` or `NOT_APPLICABLE`. Unverified evidence never counts as passing. The JSON report retains the evidence per boundary; it does not compress unlike results into a score.
 
-## The dependency chain
+## Load-bearing golden fixture
 
-```text
-imports → versions → markers → types → build → licenses → deprecations
-                               ↖__________↗
-                                  lazy edge
-```
+`fixtures/chip.dat` contains measured rim/notch coordinates for a chipped teacup. Its golden notch depth is 2.40 mm. The tolerance is derived as five percent of that depth: **0.12 mm**. The build evaluator validates the source fixture and the copies embedded in both the sdist and wheel. A 0.05 mm perturbation passes; a 0.13 mm perturbation fails with `FIXTURE_GEOMETRY_OUT_OF_TOLERANCE`.
 
-The static chain expresses data dependencies: each boundary consumes evidence from the preceding one. The `types` to `build` edge is lazy through the types module's PEP 562 `__getattr__`, because build imports the runtime `AuditReceipt` protocol from types. This prevents an import-time cycle while retaining a real two-way type/build contract.
+The golden geometry reference is `fixtures/golden-profile.json`; both files are shipped in the sdist and wheel.
 
-The final `chipcup.audit` console entry point invokes the full audit in a fresh process. It is the composition boundary; `deprecations` does not import `imports` to close a Python module cycle.
+## Receipt edges and import isolation
 
-## Why the report keeps separate verdicts
+Evaluators do not import one another. They exchange neutral records from `chipcup._contracts`; the runtime orders those receipts along the declared cycle. The single module-load boundary is `chipcup.cli:main → chipcup.runtime`, imported inside `main()`. CI rejects evaluator-to-evaluator imports and verifies that importing `chipcup.cli` does not load the runtime.
 
-The underlying results have different shapes: module identity, PEP 440 order and specifier membership, marker Booleans, structural typing judgments, artifact metadata comparisons, SPDX/file-coverage evidence, and warning chronology. The JSON report preserves each of these records. Its convenience `passed` property is only the conjunction needed by CI; it does not replace or rank the individual findings.
+## Degraded operation
 
-## License model
+If a prerequisite receipt or evidence source is absent, that boundary emits its named `UNVERIFIED` verdict. The downstream boundary cannot turn missing evidence into a pass. CI forces each missing-prerequisite path and asserts the seven verdict names.
 
-The Python package is licensed under MIT. The distribution declares `License-Expression: MIT` and includes both `LICENSE` and `LICENSES/Fixture-Dual.txt` as `License-File` entries.
+## Standards and scope
 
-The fixture's alternative grant is tracked separately by chipcup's supplemental mapping:
+PEP 387 is CPython's compatibility policy. The requirement for one published project minor cycle after the required warning observations is chipcup's explicit project policy, not a claim that PEP 387 mandates that schedule for third-party distributions.
 
-```text
-LicenseRef-Fixture-Dual → LICENSES/Fixture-Dual.txt
-```
+PEP 639's distribution-level `License-Expression` does not assign a separate expression to each file. chipcup declares the distribution as MIT and tracks the fixture-specific alternative grant through a supplemental `LicenseRef-Fixture-Dual` mapping and shipped text. This is checked independently of archive-level metadata.
 
-The audit requires that mapped text to exist in the source tree and both archives. This is intentionally not presented as PEP 639 file-scoping syntax: Core Metadata's `License-Expression` describes the distribution archive, not a per-file assignment of expressions. The supplemental mapping records the fixture-specific grant without changing the package's MIT expression.
-
-## Scope limits
-
-- The SPDX parser checks the expression grammar and custom-reference mapping. It does not embed the complete, time-varying SPDX License List and is not legal advice.
-- The PEP 517 backend is read from the sdist's `pyproject.toml`. A built wheel alone does not attest which backend produced it. CI narrows that gap by building the wheel from the sdist in the same job.
-- Type checks use inline annotations and explicit protocol contracts. The current wheel audit compares literal `__all__` surfaces; it is not a complete API compatibility checker for arbitrary dynamic exports.
-- Runtime-checkable protocols are shallow structural checks. Mypy provides the static judgment; runtime protocol success does not prove implementation semantics.
-- The removal-window rule is chipcup's own policy. PEP 387 governs CPython's compatibility policy, not third-party packages on PyPI.
-- The audit's environment matrix is only as complete as its configured rows and CI jobs. A simulated marker row is not evidence that a warning was emitted on a real target platform; warning observations must come from the corresponding platform execution.
-
-## Open design question
-
-When a required marker row never emits the warning, the current policy keeps the removal blocked. The warning clock begins only after the warning has actually been observed on every required row. See [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) for the rationale and remaining questions.
+See [Architecture](docs/ARCHITECTURE.md), [Design rationale](docs/DESIGN_RATIONALE.md), and [open questions](docs/OPEN_QUESTIONS.md).

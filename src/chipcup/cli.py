@@ -136,6 +136,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 warning_observations=observations,
             )
         )
+        # Lazy entry boundary: importing chipcup.cli alone never loads
+        # the receipt-cycle orchestrator or any evaluator package.
+        from chipcup.runtime import run_receipt_cycle
+
+        receipt_cycle = run_receipt_cycle(
+            sdist_path=args.sdist,
+            wheel_path=args.wheel,
+            project_root=args.project_root,
+            marker_rows=rows,
+            warning_observations=observations,
+            version_specifier=args.version_specifier,
+            published_releases=("0.1.0",),
+            build_isolation_verified=True,
+        )
     except ModuleNotFoundError as error:
         print(
             json.dumps(
@@ -161,8 +175,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    print(json.dumps(report.to_dict(), indent=2, default=str))
-    return 0 if report.passed else 1
+    payload = report.to_dict()
+    payload["receipt_cycle"] = receipt_cycle
+    print(json.dumps(payload, indent=2, default=str))
+    return 0 if report.passed and receipt_cycle["passed"] else 1
 
 
 if __name__ == "__main__":

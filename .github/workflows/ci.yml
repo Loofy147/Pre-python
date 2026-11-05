@@ -24,6 +24,10 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -e ".[test]"
       - name: Run tests with deprecations visible
         run: python -W error::DeprecationWarning -m pytest
+      - name: Enforce evaluator import boundaries
+        run: python scripts/check_import_boundary.py
+      - name: Prove degraded-operation and fixture-tolerance cases
+        run: python -m pytest tests/test_execution_proof.py
       - name: Static typing and coded escape checks
         if: matrix.python-version == '3.13'
         run: python -m mypy
@@ -77,7 +81,7 @@ jobs:
           pattern: warning-evidence-*
           path: warning-evidence
           merge-multiple: true
-      - name: Run seven-boundary release audit
+      - name: Run seven-boundary receipt-cycle release audit
         run: |
           python -m chipcup.cli \
             --sdist dist/chipcup-0.1.0.tar.gz \
@@ -85,6 +89,9 @@ jobs:
             --matrix fixtures/audit-matrix.json \
             --warning-evidence warning-evidence/ \
             --project-root .
+      - name: Assert measured fixture and all seven receipt verdicts
+        run: |
+          python -c "import json, subprocess, sys; p=subprocess.run([sys.executable, '-m', 'chipcup.cli', '--sdist', 'dist/chipcup-0.1.0.tar.gz', '--wheel', 'dist/chipcup-0.1.0-py3-none-any.whl', '--matrix', 'fixtures/audit-matrix.json', '--warning-evidence', 'warning-evidence/', '--project-root', '.'], capture_output=True, text=True); d=json.loads(p.stdout); assert p.returncode == 0, d; assert d['receipt_cycle']['passed'], d['receipt_cycle']; assert all(v['state'] == 'PASS' for k,v in d['receipt_cycle']['receipts'].items())"
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: chipcup-distributions
