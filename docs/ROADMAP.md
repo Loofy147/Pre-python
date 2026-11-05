@@ -1,159 +1,73 @@
-# Roadmap and release gates
+# Roadmap and implementation gates
 
-## Guiding rule
+## Rule
 
-Do not expand the feature list until the system can fail closed on invalid evidence and explain every release decision. The roadmap is ordered by dependency, not by visual appeal or module count.
+A gate closes only when source, tests, reproducible evidence, and a named commit demonstrate the exit criteria. No dates are assigned.
 
-No dates are assigned. A stage is complete only when its exit criteria are evidenced on a named commit and the relevant CI run.
-
-## Stage 0 — Correctness and source-of-truth cleanup
-
-**Objective:** remove false-pass paths and contradictions in the existing prototype.
+## Gate 0 — Repair and reconcile the Alpha
 
 Work:
+- reject NaN, infinity, booleans, malformed geometry, and invalid numeric inputs;
+- bound archive member count/size; reject duplicate normalized paths and unsafe members;
+- replace caller build-isolation Boolean as a trust mechanism with explicit unverified assertion until attestation verification exists;
+- compare canonical package manifests/hashes across source, sdist, and wheel;
+- install and audit the exact wheel built from the sdist in a clean environment;
+- remove unsupported stub claims or implement and test semantic agreement;
+- fix marker validation for selected versus unselected rows;
+- authenticate and bind warning observations; reject duplicate/inconsistent/stale records;
+- derive release version from tag and compare with project/artifact identity;
+- unify runtime.py and gate.py execution/report semantics;
+- reconcile PR #4 exit-code contract with actual receipt semantics;
+- preserve limitations in documentation.
 
-- reject NaN, infinity, and booleans in geometry and numeric policy inputs;
-- make archive parsing bounded and reject ambiguous paths/members;
-- replace caller-provided build-isolation Boolean with an explicitly unverified assertion until independent evidence is verified;
-- compare canonical package-relative file manifests and content hashes across source, sdist, and wheel;
-- build and install the exact wheel from the sdist in a clean environment;
-- reconcile GPU stub declarations and runtime contract mappings, or remove the unsupported stub subsystem;
-- make the marker evaluator validate only selected rows while still validating the policy's required scope;
-- validate warning count/emitted consistency and reject malformed or duplicate records;
-- derive release workflow version from the tag and compare with project metadata;
-- choose one authoritative orchestration path and bridge or retire the other;
-- reconcile the open exit-code proposal with the actual policy vocabulary.
+Exit: regression tests for known false-pass cases, exact artifact validation, fail-closed defaults, one authoritative report contract, tag mismatch rejection, and full CI on the final source commit.
 
-Exit criteria:
+## Gate 1 — Versioned evidence and policy contracts
 
-- all known critical false-pass cases have regression tests;
-- exact produced wheel is installed and audited;
-- all package files are accounted for by a declared source-to-artifact policy;
-- direct API defaults fail closed;
-- release tag mismatch fails before publication;
-- only one supported report contract exists;
-- full CI passes on the final commit.
+Create source/artifact subjects, evidence envelope, validity/trust/completeness axes, typed relations, claim and obligation records, append-only corrections/revocation, deterministic policy bundles, and replayable decisions.
 
-## Stage 1 — Canonical evidence and claim model
+Exit: schema/canonicalization tests, wrong-subject and tamper rejection, preserved corrections, deterministic replay, and no secrets in evidence.
 
-**Objective:** create the data contract that makes the product more than a collection of evaluators.
+## Gate 2 — Python change-to-release vertical slice
 
-Work:
+Build an exact base/head resolver, diff/API classification, Griffe adapter, dependency/build/package classification, impact coverage, deterministic policy obligations, pytest/mypy/package/provenance/SPDX/archive adapters, exact artifact digest, clean exact-wheel install, dossier, and GitHub check.
 
-- versioned evidence envelope;
-- immutable subject identifiers and artifact digests;
-- typed evidence kinds and trust status;
-- validated relationship records;
-- claim status separate from receipt state;
-- append-only correction and supersession model;
-- deterministic serialization and replay;
-- raw output references with digest validation.
+Exit: complete sample project flow, evidence-linked obligations, no ALLOW for missing/wrong evidence, exact artifact verified, limitations surfaced, and usable latency/output.
 
-Exit criteria:
+## Gate 3 — Comparative proof of value
 
-- schema conformance tests;
-- malformed and mismatched subject rejection;
-- immutable evidence behavior;
-- correction history preserves prior records;
-- independent replay produces identical policy inputs.
+Pre-register baseline/mutants, evaluate paired immutable subjects, measure precision/recall, obligation coverage, critical false-passes, false-blocks, costs, perform ablations, obtain independent reproduction and user feedback.
 
-## Stage 2 — Specialist tool adapters
+Exit: incremental value over competent baseline, no critical false-pass in declared corpus, acceptable false-block and CI overhead, developers understand value, credible adoption path.
 
-**Objective:** reuse existing tool quality rather than reimplement it.
+If this fails, reduce scope, integrate with existing platforms, or stop product expansion.
 
-Initial adapters:
+## Gate 4 — Portability experiment
 
-1. Griffe for base/candidate API snapshots;
-2. pydistcheck and archive inspectors for distribution structure;
-3. Twine description rendering;
-4. packaging for version/marker semantics;
-5. version-pinned SPDX License List validation;
-6. PyPI PEP 740/SLSA attestation verification.
+Choose one second language from real user demand. Implement a language-specific API/dependency/build/artifact adapter with documented semantics, blind spots, and regression corpus.
 
-Exit criteria:
+Exit: same evidence contract works without false equivalence and benchmark justifies maintenance cost.
 
-- each adapter binds output to exact source/artifact identity;
-- preserves raw output, tool version, and invocation;
-- distinguishes pass, fail, unsupported, unavailable, and incomplete;
-- includes positive, negative, malformed, and wrong-subject tests;
-- can be reproduced from published instructions.
+## Gate 5 — Multi-repository governance
 
-## Stage 3 — Cross-release lifecycle and policy engine
+Consider policy composition, expiring waivers, more CI providers, durable shared history, optional graph indexing, and private/self-hosted operation.
 
-**Objective:** turn observations into historical, explainable policy decisions.
+Exit: demand, tenant/security model, least privilege, operational ownership, and retention are established.
 
-Work:
+## Gate 6 — Advisory agent and deployment/runtime evidence
 
-- published release inventory;
-- immutable API snapshot history;
-- warning observations tied to release and native environment;
-- platform support matrix history;
-- configurable deprecation/removal windows;
-- versioned policies and exceptions;
-- ALLOW / DENY / APPROVAL_REQUIRED decisions;
-- contradictions, stale evidence, and supersession handling.
+An agent may investigate or propose patches but cannot alter policy, approve exceptions, merge, publish, or certify itself. Deployment/runtime evidence may be linked later; monitoring and incident response require a separate scope decision.
 
-Exit criteria:
+## First-release non-goals
 
-- policy replay against historical releases is deterministic;
-- removal eligibility is tested against multi-platform and multi-release scenarios;
-- no missing required evidence can produce ALLOW;
-- policy changes preserve historical decisions.
+- replacing GitHub, GitLab, Qodo, Graphite, Sourcegraph, CodeQL, Launchable, or GUAC;
+- general autonomous engineer;
+- universal graph;
+- every language;
+- predictive subsets replacing required tests;
+- runtime monitoring or incident response;
+- legal compliance guarantee;
+- opaque quality score;
+- dashboard or hosted multi-tenant service before demand.
 
-## Stage 4 — CI product and developer experience
-
-**Objective:** make the assurance engine practical to adopt.
-
-Work:
-
-- reusable GitHub Action;
-- machine-readable versioned report and human summary;
-- pull-request checks with precise finding links;
-- local CLI with explicit offline behavior;
-- provider-neutral CI evidence contract;
-- exit-code and report compatibility policy.
-
-Exit criteria:
-
-- clean setup on a sample repository;
-- no credentials required for public-source checks;
-- least privilege for private or publishing workflows;
-- example integration and migration documentation;
-- stable schema and exit-code tests.
-
-## Stage 5 — Comparative validation and first stable release
-
-**Objective:** prove the project provides a distinct, useful improvement.
-
-Work:
-
-- public benchmark corpus;
-- declared baseline toolchain;
-- seeded defect/mutant matrix;
-- true/false positive analysis;
-- independent reproduction;
-- performance and resource measurements;
-- security review;
-- release provenance verification.
-
-Exit criteria:
-
-- reproducible benchmark demonstrates a concrete incremental value;
-- no critical false-pass in the release decision path;
-- security and operational limits are documented;
-- all core capabilities are implemented rather than aspirational;
-- release artifacts and their provenance are independently verifiable;
-- versioned schemas and compatibility policies are stable.
-
-## Explicit non-goals for the first stable release
-
-- replacing Griffe, packaging, Twine, mypy, or SPDX;
-- offering legal advice or automated legal acceptance;
-- claiming every Python package's behavior can be proven statically;
-- executing arbitrary candidate package code in a privileged process;
-- a large hosted dashboard before local evidence and policy semantics are stable;
-- an opaque score that hides why a release passed or failed.
-
-## Release readiness
-
-The current 0.1.0 Alpha is a research prototype. Do not publish a production-readiness claim until Stage 0 through Stage 5 exit criteria are met. A tag-shaped version or successful CI run is not a substitute for those gates.
+The current 0.1.0 Alpha is a research prototype. A green repository CI run is not a product-release gate.

@@ -1,46 +1,55 @@
 # Documentation index
 
-This documentation distinguishes three things:
+Status labels:
+- **CURRENT:** present in the reviewed source.
+- **PARTIAL:** limited implementation exists and its boundary is stated.
+- **TARGET:** proposed design, not shipped behavior.
+- **EXPERIMENT:** hypothesis requiring measured results.
+- **OPEN:** not established.
 
-- **Current implementation:** behavior present in the source tree and exercised by current tests or CI.
-- **Known limitation:** a gap, false-pass risk, or missing source of evidence in the current implementation.
-- **Target design:** a proposed capability that requires implementation and proof before it can be advertised.
+The repository is named Pre-python. The current distribution and import package are named chipcup.
 
-Do not convert a target-design statement into an implementation claim.
-
-## Start here
+## Product and architecture
 
 | Document | Purpose |
 |---|---|
-| [Status](STATUS.md) | Current implementation truth, verified evidence, and known gaps |
-| [Python API reference](API_REFERENCE.md) | Current public exports and experimental evaluator APIs |
-| [Architecture](ARCHITECTURE.md) | Existing execution paths and target system architecture |
-| [Evidence model](EVIDENCE_MODEL.md) | Proposed evidence envelope, trust levels, claims, and relationships |
-| [Policy model](POLICY_MODEL.md) | Verdicts, release decisions, temporal rules, and exceptions |
-| [CLI reference](CLI_REFERENCE.md) | Actual current command, inputs, output, and exit behavior |
-| [Integrations](INTEGRATIONS.md) | Responsibilities of existing tools and planned adapters |
-| [Security](SECURITY.md) | Threat model, trust boundaries, and security requirements |
-| [Validation](VALIDATION_AND_BENCHMARK.md) | Current test evidence, missing tests, and differentiation benchmark |
-| [Roadmap](ROADMAP.md) | Sequenced implementation stages and release gates |
-| [Design rationale](DESIGN_RATIONALE.md) | Architectural decisions, non-goals, and product thesis |
-| [Open decisions](OPEN_QUESTIONS.md) | Prioritized unresolved design and implementation decisions |
+| [Product strategy](PRODUCT_STRATEGY.md) | Product thesis, market overlap, user hypotheses, differentiation test |
+| [Architecture review](ARCHITECTURE_REVIEW.md) | Adversarial review across product, technical, security, operational, and commercial dimensions |
+| [MVP specification](MVP_SPEC.md) | First complete Python change-to-release vertical slice |
+| [Change taxonomy](CHANGE_TAXONOMY.md) | Change types, evidence needs, and staged scope |
+| [Architecture](ARCHITECTURE.md) | Current execution paths and proposed layered architecture |
+| [Decision record](DECISIONS/ADR-0001-change-assurance-scope.md) | Accepted direction, rejected scope, and rationale |
 
-## Vocabulary
+## Trust, evidence, and policy
 
-**Evidence** is a sourced observation or artifact. A hash can establish content identity, but does not alone establish who produced the content or whether it is trustworthy.
+| Document | Purpose |
+|---|---|
+| [Evidence model](EVIDENCE_MODEL.md) | Subjects, evidence envelopes, trust, lineage, claims, and correction history |
+| [Policy model](POLICY_MODEL.md) | Obligations, rule results, waivers, and final decisions |
+| [Security](SECURITY.md) | Threat actors, trust boundaries, isolation, agent permissions, operational controls |
+| [Integrations](INTEGRATIONS.md) | Existing tools, adapter contracts, and build-versus-integrate decisions |
 
-**Claim** is a statement about a subject, such as “the public API removal is compatible with the declared warning policy.”
+## Validation and delivery
 
-**Receipt** is the current prototype's boundary result. Its operational state is not an epistemic confidence score.
+| Document | Purpose |
+|---|---|
+| [Validation and benchmark](VALIDATION_AND_BENCHMARK.md) | Current evidence, adversarial tests, baseline, metrics, acceptance |
+| [Roadmap](ROADMAP.md) | Ordered implementation gates |
+| [Status](STATUS.md) | Source snapshot, open PRs, current implementation truth, defects |
+| [Open questions](OPEN_QUESTIONS.md) | Unresolved decisions and closure evidence |
 
-**Policy** is a versioned set of rules and scopes that determines which evidence is required and how it is evaluated.
+## Current Python interfaces
 
-**Decision** is the policy result for a release: ALLOW, DENY, or APPROVAL_REQUIRED. It must include reasons and evidence references.
+| Document | Purpose |
+|---|---|
+| [Python API reference](API_REFERENCE.md) | Experimental exports in current Alpha source |
+| [CLI reference](CLI_REFERENCE.md) | Actual CLI inputs, output, and current-main exit behavior |
+| [Design rationale](DESIGN_RATIONALE.md) | Why the product direction and constraints were selected |
 
-**Subject** is the exact entity under evaluation: source commit, distribution artifact, installed package, public API snapshot, platform observation, release, or policy version.
+## Reading order
 
-**Provenance** is evidence about origin and production. A caller-provided Boolean is an assertion, not independent provenance verification.
+Product decisions: Product Strategy → Architecture Review → ADR-0001 → MVP Specification.
 
-## Documentation maintenance rule
+Implementation: Status → Architecture → Evidence Model → Policy Model → Security → Integrations → Validation and Benchmark → Roadmap.
 
-When implementation changes, update the relevant status row, CLI examples, evidence contract, and tests-to-claims mapping in the same change. Every claim of verified behavior must point to a reproducible test, CI execution, immutable artifact, authoritative source, or other independently re-checkable evidence.
+Do not use target documents as evidence that a capability is implemented. Status changes only when source, tests, and reproducible artifacts exist on a named commit.

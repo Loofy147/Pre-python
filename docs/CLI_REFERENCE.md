@@ -2,115 +2,70 @@
 
 ## Scope
 
-This document describes the current CLI on the reviewed main branch. It does not document the richer exit-code mapping proposed in an unmerged pull request.
+This reference describes the current chipcup 0.1.0 Alpha CLI on reviewed main commit 7ef2c82fb2ebdf2e08376b154bd6e9f112b6a5ca. It is a Python distribution-audit command, not the target Change Assurance Engine CLI.
 
-The installed console command is chipcup.audit. The module form is python -m chipcup.cli.
+## Invocation
 
-## Install for development
+~~~bash
+python -m chipcup.cli \
+  --sdist dist/chipcup-0.1.0.tar.gz \
+  --wheel dist/chipcup-0.1.0-py3-none-any.whl \
+  --matrix fixtures/audit-matrix.json \
+  --warning-evidence warning-evidence/ \
+  --project-root . \
+  --version-specifier ">=0.1.0,<1.0.0" \
+  --build-isolation-verified
+~~~
 
-    python -m pip install -e ".[test]"
-
-This installs the checkout in editable mode and installs the optional test/build tools.
-
-## Audit command
-
-    python -m chipcup.cli --sdist PATH --wheel PATH --warning-evidence PATH [--matrix PATH] [--project-root PATH] [--version-specifier SPECIFIER] [--build-isolation-verified]
-
-### Arguments
+## Arguments
 
 | Argument | Required | Current behavior |
 |---|---:|---|
-| --sdist | Yes | Path to the source distribution archive |
-| --wheel | Yes | Path to the wheel archive |
-| --warning-evidence | Yes | JSON file or directory containing warning observation JSON files |
-| --matrix | No | Marker matrix JSON; defaults to fixtures/audit-matrix.json |
-| --project-root | No | Project root for source fixtures and license text; defaults to current directory |
-| --version-specifier | No | PEP 440 specifier for the installed distribution; defaults to >=0.1.0,<1.0.0 |
-| --build-isolation-verified | No | Caller assertion that the supplied archives were built in isolation; default is false in the CLI |
+| --sdist | Yes | Path to source distribution archive |
+| --wheel | Yes | Path to wheel archive |
+| --matrix | No | JSON marker matrix; defaults to fixtures/audit-matrix.json |
+| --project-root | No | Project root; defaults to current directory |
+| --warning-evidence | Yes | JSON file or directory of warning-observation JSON files |
+| --version-specifier | No | PEP 440 specifier; defaults to >=0.1.0,<1.0.0 |
+| --build-isolation-verified | No | Caller assertion that archives were built in isolation; defaults false |
 
-The build-isolation flag is not a signature, attestation, trusted-build-system check, or cryptographic provenance verifier. A user can supply the flag even if the archives were not built in isolation. The current code then treats the assertion as verified. This behavior must be replaced before production use.
+The build-isolation flag is not a cryptographic attestation and must not be presented as independent provenance verification.
 
-## Marker matrix input
+## Matrix input
 
-The current fixture is a JSON array. Each row includes a name, PEP 508 expression, stub-set name, PEP 440 version specifier, explicit environment, and optional extra.
-
-Example shape:
-
-    [
-      {
-        "name": "linux",
-        "expression": "sys_platform == 'linux'",
-        "stub_set": "posix",
-        "version_specifier": ">=0.1.0,<1.0.0",
-        "environment": {
-          "sys_platform": "linux",
-          "platform_system": "Linux"
-        }
-      }
-    ]
-
-The current CLI validates basic field types and passes rows to the receipt cycle. It is not a general supported-platform policy editor. Duplicate row IDs, conflicting scopes, and policy authorization need stronger validation.
+The input is a JSON array. Each row currently provides name, expression, stub_set, optional version_specifier, optional environment object, and optional extra. The parser checks basic structure and types; this does not make the complete marker policy contract authoritative.
 
 ## Warning evidence input
 
-The capture script is scripts/capture_warning_evidence.py.
+The input may be a JSON array or a JSON object per file. Each record currently includes release, matrix_row, platform, marker_selected, emitted, and warning_count.
 
-    python scripts/capture_warning_evidence.py --release RELEASE --matrix PATH --output PATH
+The loader checks basic field types but does not authenticate the producer, bind the observation to a trusted workflow identity, or prove that the record belongs to the exact candidate/source revision.
 
-The release is supplied by the caller. The matrix defaults to fixtures/audit-matrix.json. Output is one JSON observation for the native platform executing the script.
+## Output
 
-The current observation includes:
+The CLI prints a JSON report containing passed, dependency_order, and one entry per receipt. Each receipt records boundary, verdict, state, evidence, and issues.
 
-- release;
-- matrix_row;
-- marker_selected;
-- emitted;
-- warning_count;
-- platform.
+This is an Alpha receipt report, not a versioned Change Assurance Dossier.
 
-A warning file is mutable input. The current loader validates basic field types, but it does not cryptographically authenticate the collector, prove the native environment, verify the source commit, bind the event to a published index record, or prevent forged/duplicated observations. Treat it as untrusted evidence.
-
-## Current output
-
-The CLI prints a JSON object containing:
-
-- dependency_order;
-- passed;
-- receipts.
-
-Each receipt contains boundary, verdict, state, evidence, and issues. The current evidence contents differ by evaluator and are not yet a versioned public JSON schema.
-
-Do not build external automation around undocumented dictionary keys until a versioned schema is introduced.
-
-## Current exit behavior
-
-On reviewed main:
+## Current main exit behavior
 
 | Exit | Meaning |
 |---:|---|
-| 0 | The receipt cycle reports passed |
-| 1 | A receipt cycle failure or general audit error |
-| 2 | argparse usage error |
-| 3 | Required module import failed |
+| 0 | Report passed |
+| 1 | Report failed or a general audit exception occurred |
+| 3 | A required module could not be imported |
+| 2 | Standard argparse usage error for invalid command-line arguments |
 
-This is the current behavior, not a stable future contract. The open pull request proposing detailed exit codes is not merged into the reviewed main commit. Review it against STATUS.md and the product's final decision model before adopting it.
+The open PR #4 proposes a different stable exit-code enum. It is not part of the reviewed main commit and must not be documented as current behavior until merged and reconciled with receipt semantics.
 
-## Current CI workflow
+## Limitations
 
-The repository CI:
+- published release history is hardcoded to 0.1.0 in the current CLI;
+- the CLI does not implement the full historical deprecation-removal decision;
+- build isolation is a caller assertion;
+- warning JSON is not authenticated;
+- there is no general change classification or impact coverage;
+- there is no canonical evidence envelope or durable evidence ledger;
+- the CLI and public GateReport API use different execution paths.
 
-- installs the checkout in editable mode;
-- runs pytest with DeprecationWarning treated as an error;
-- checks evaluator import boundaries;
-- runs execution-proof tests;
-- runs mypy on the configured Python 3.13 lane;
-- captures warning evidence on Ubuntu, Windows, and macOS;
-- builds an sdist and a wheel from that sdist;
-- runs Twine description validation;
-- executes the receipt cycle and uploads the distributions as a workflow artifact.
-
-Important limitation: the workflow does not install the exact wheel it just built into a clean isolated environment and then audit that installed wheel. The current installed metadata/import evidence can therefore describe the editable checkout rather than the newly built wheel.
-
-## Recommended use
-
-Use the CLI to reproduce the repository's current experiment and inspect its receipts. Do not use it as the sole control for publishing a production package, making an automated API removal decision, or verifying build provenance.
+See STATUS.md and API_REFERENCE.md.

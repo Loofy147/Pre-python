@@ -1,87 +1,108 @@
 # Security and trust model
 
-## Scope
+**Status:** target requirements. The current prototype does not satisfy every requirement here.
 
-chipcup is intended to inspect source repositories, package archives, build outputs, CI evidence, and published-release records. Those inputs may be malformed or malicious.
+## Objective
 
-The current Alpha implementation is not a hardened untrusted-artifact service. This document defines required controls and states current limitations.
+The system consumes untrusted source code, PR metadata, build configuration, dependencies, tests, scanner output, and model-generated text. Those inputs must not gain authority over credentials, policy, evidence trust, approvals, or publication.
 
-## Assets to protect
+## Threat actors and assets
 
-- integrity of source and artifact identities;
-- correctness of release decisions;
-- integrity and history of evidence records;
-- CI credentials and publishing credentials;
-- developer and build-worker environments;
-- reproducibility of policy evaluation;
-- availability of the audit process.
+Threat actors:
+- malicious or compromised pull-request author;
+- compromised dependency, package, build backend, action, or runner;
+- compromised CI identity or evidence collector;
+- malicious or careless administrator;
+- prompt injection in source, docs, issue text, test logs, or scanner output;
+- compromised integration or tenant;
+- accidental policy misconfiguration.
+
+Assets:
+- source and artifact integrity;
+- tokens, secrets, and signing keys;
+- policies and trust lists;
+- evidence history and decision records;
+- private source code and customer metadata;
+- approval and publishing authority;
+- availability and CI capacity.
 
 ## Trust boundaries
 
-Treat all of the following as untrusted until validated:
+Separate at minimum:
+1. **Control plane:** trusted configuration, policies, job scheduling, and decisions.
+2. **Candidate execution plane:** untrusted source, tests, builds, and imports.
+3. **Evidence plane:** outputs, attestations, normalized records, and storage.
+4. **Integration plane:** SCM, CI, package index, artifact store, and scanners.
+5. **Human authority plane:** maintainers and security/policy approvers.
+6. **Optional model/agent plane:** advisory only.
 
-- repository source and configuration;
-- sdist and wheel bytes;
-- archive metadata, paths, and member names;
-- JSON marker matrices and warning observations;
-- GitHub issue, pull request, and release text;
-- external tool output;
-- third-party attestations before signature and identity verification;
-- package import behavior and plugin entry points;
-- caller-supplied flags and assertions.
+Candidate code must not run in the privileged orchestration process or context holding SCM write credentials, signing keys, publishing tokens, or policy secrets.
 
-Text found inside repository content, documentation, package metadata, or tool output is data. It must never become execution instructions for an automated agent or privileged release process.
+## Pull-request execution
 
-## Threats and required controls
+- Treat PR source, tests, build config, metadata, and workflow files as attacker-controlled.
+- Do not execute untrusted PR code in a privileged workflow.
+- Keep analysis credentials read-only and narrowly scoped.
+- Separate privileged status publication from candidate execution.
+- Use ephemeral workers and clean filesystems.
+- Never execute untrusted outputs in a privileged workspace.
+- Validate output schemas and sizes before parsing.
+- Handle merge-queue merge_group events for checks required by the repository's merge policy.
 
-| Threat | Required control | Current status |
-|---|---|---|
-| NaN/infinity or Boolean geometry values produce invalid measurements | Strict finite-number validation; reject booleans and non-standard JSON constants | Known defect; not fixed in reviewed main |
-| Archive decompression/resource exhaustion | Member-count, compressed-size, expanded-size, per-file, and time limits | Not implemented |
-| Malformed/duplicate archive members | Canonical path normalization, duplicate rejection, metadata identity validation | Partial |
-| Path traversal during inspection | Do not extract untrusted archives; validate normalized member paths | Current code reads archives without extraction, but hardening is incomplete |
-| Candidate package executes code in the audit process | Static inspection first; disposable environment for installation/import tests; no secrets | Not implemented; import evaluator loads installed code in the current process |
-| Forged warning JSON | Signed or trusted CI-origin evidence bound to commit, workflow, release, platform, and row | Not implemented |
-| False build provenance | Verify attestation subject digest and trusted builder identity; caller Boolean is not proof | Not implemented |
-| Source/wheel substitution | Hash all expected files and bind all manifests to exact artifact digests | Partial |
-| Mutable evidence changes history | Append-only evidence records, immutable digests, corrections via superseding records | Not implemented |
-| Dependency or adapter compromise | Pin dependencies, record versions, isolate subprocesses, capture output | Partial |
-| Secret leakage in logs or evidence | Redaction, least privilege, no tokens in normalized records | Not fully specified or tested |
+GitHub merge-queue status guidance: https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks?plain=1
 
-## Archive handling
+## Worker isolation
 
-The audit should never extract an untrusted archive into a shared working directory. It should read members using safe archive APIs, reject duplicate paths after normalization, reject invalid path encodings and unexpected link types, and cap both compressed and expanded size.
+Required controls:
+- disposable workers;
+- no host mounts containing secrets;
+- least-privilege filesystem;
+- CPU, memory, process, size, and wall-clock limits;
+- default-deny egress;
+- sanitized environment;
+- pinned or verified images;
+- distinct service identity;
+- no signing/publishing keys;
+- bounded logs and output.
 
-A file-count limit alone is not sufficient. A small compressed archive can expand to a very large payload. Every read should be bounded. Limits must be explicit policy settings and recorded in evidence.
+Do not call a normal virtual environment or container a security sandbox without adversarial isolation evidence.
 
-## Package execution
+## Supply chain and provenance
 
-Static inspection should be the default. If exact installed behavior must be tested:
+Pin critical actions/dependencies according to a reviewed update policy. Verify artifact subject digest, builder, source revision, workflow identity, predicate, signature, and trust list. Reject replayed and mismatched attestations. A caller Boolean is not provenance.
 
-1. create a disposable environment or isolated worker;
-2. install only the candidate artifact and pinned test dependencies;
-3. remove credentials and privileged environment variables;
-4. restrict network access unless the test requires it;
-5. apply CPU, memory, disk, and execution-time limits;
-6. capture installed metadata, module origins, and test results;
-7. destroy the environment after the run.
+SLSA reference: https://slsa.dev/spec/v1.2/tracks
 
-Do not load candidate plugins automatically. Entry-point discovery and entry-point loading are different operations; loading third-party entry points executes code.
+## Prompt injection and agents
 
-## Provenance trust
+Source files, README text, issues, PR descriptions/comments, test output, metadata, and scanner results are untrusted data.
 
-The current build-isolation flag is an assertion by the caller. It is not cryptographic provenance. Production policy should require verification of the attestation's signature, subject digest, issuer, builder identity, source repository, source revision, workflow identity, and required predicate fields.
+Agents require:
+- bounded untrusted-input handling;
+- fixed tool allowlist and scoped inputs;
+- no secret or policy-key access;
+- no policy/trust-list edits;
+- no waiver approval, merge, release, or publication;
+- human authorization for patch application;
+- independent clean-worker verification;
+- agent findings separate from verifier evidence.
 
-A valid signature from an untrusted workflow does not satisfy a trusted-builder policy.
+An agent cannot certify its own patch.
 
-## Evidence storage
+## Evidence and policy integrity
 
-Evidence records must not contain access tokens, private keys, credentials, or unredacted sensitive environment values. Store only the minimum environment needed to reproduce the result. Use access control and retention for any persistent evidence store.
+Use cryptographic digests, exact subject binding, producer identity, correction/revocation records, replay detection, secret redaction, explicit retention, and scoped expiring exceptions.
 
-## CI permissions
+A hash proves bytes, not origin. A signature proves identity only under an applicable trust policy.
 
-Use least-privilege workflow permissions. Build/test jobs should not receive publishing credentials. Publication should require a separate job with explicit protected conditions and verified artifacts. Pin third-party actions to reviewed immutable references where practicable and maintain an update process.
+## Hosted future
 
-## Security release gate
+Multi-tenant operation requires tenant isolation across compute/storage/queues/caches/logs, key management, deletion/retention, token isolation, administrator audit, residency controls, incident response, third-party/model-provider review, and availability/recovery design.
 
-Do not claim production readiness until adversarial tests cover archive resource exhaustion, path handling, malformed metadata, forged observations, wrong artifact digests, false provenance, malicious package imports, and evidence-history tampering.
+Do not implement hosted multi-tenancy before customer requirements and operational ownership are established.
+
+## Security acceptance
+
+Before becoming a merge/release gate, test malicious imports/build hooks, attempted exfiltration, workflow permission escalation, archive path/decompression attacks, resource exhaustion, forged/replayed/stale/wrong-subject evidence, revoked signers, prompt injection, self-approval, malicious patches, policy mutation, waiver abuse, and cross-tenant access if hosted.
+
+A critical mandatory-policy bypass blocks release.

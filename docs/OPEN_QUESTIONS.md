@@ -1,115 +1,47 @@
 # Open decisions and risk register
 
-This file tracks unresolved decisions that affect correctness or product scope. Each item should be closed with an ADR, implementation, test, or explicitly accepted limitation. Discussion alone does not close an item.
+An item closes only through an explicit decision and its required evidence. Discussion or documentation wording alone does not close an implementation question.
 
-## P0 — Resolve before expanding implementation
+## P0 — Resolve before new product code
 
-### P0-1. Which orchestration path is authoritative?
+1. **Authoritative execution path:** runtime.py is used by the CLI; gate.py exposes a separate GateRequest/GateReport path. Closure: one report contract, migration policy, and end-to-end tests.
+2. **Type-surface guarantee:** current checks do not establish .pyi/runtime semantic equality. Closure: remove unsupported guarantee or implement a genuine semantic checker with positive/negative fixtures.
+3. **Trusted build provenance:** define issuer, builder, source repository, workflow, subject digest, predicate, offline behavior, and revocation. Closure: positive, negative, mismatch, replay, and untrusted signer tests.
+4. **Canonical artifact identity:** define paths, generated files, metadata, platform wheels, licenses, and transformations. Closure: canonical manifest/hash tests.
+5. **Untrusted execution:** define worker isolation, egress, secrets, resources, disposal, and output handoff. Closure: malicious build/test/import and exfiltration tests.
+6. **First product boundary:** proposed Python PR-to-release assurance. Confirm artifact stage and adoption test on a sample repository.
 
-Current runtime.py implements the receipt pipeline; gate.py implements a separate GateRequest/GateReport path.
+## P1 — Product correctness and differentiation
 
-Decision needed: select one public execution path and one report schema. Decide whether the other path becomes a compatibility adapter or is removed with a migration policy.
+7. API baseline semantics: stable tag, prior release, or configured reference; define prerelease/yanked/maintenance behavior.
+8. Public API semantics: exports, docs, re-exports, dynamic __getattr__, namespace packages, overloads, stubs, native ABI, behavior contracts.
+9. Impact completeness: reflection, generated code, configuration, plugins, dynamic imports, external consumers; fallback when coverage is partial.
+10. Policy ownership: who authors, reviews, versions, and retires obligations? Classifier proposals require policy-owner approval.
+11. Deprecation chronology: release-event counting, prereleases, yanked/security/maintenance releases, and platform scope.
+12. Warning identity: bind observations to commit, release, platform, Python runtime, workflow/job, matrix, and rerun.
+13. SPDX lifecycle: pinned License List, update process, offline semantics, and LicenseRef rules.
+14. Exception authority: scope, approver, expiry, revocation, precedence, and conflict behavior.
+15. Test selection: predictive ranking must not silently remove required tests.
+16. Second language: select from actual demand and semantic contrast.
 
-Closure evidence: one end-to-end test suite exercises the authoritative path; no contradictory release semantics remain.
+## P2 — Product and operations
 
-### P0-2. What qualifies as verified build provenance?
+17. Storage: when do content-addressed local objects require relational or graph storage?
+18. Schema: compatibility, canonical serialization, migrations, and replay.
+19. CI providers: GitHub Actions first; define merge-group and provider-neutral identity.
+20. Cache invalidation: source, artifact, tool, configuration, environment, policy, and trust inputs.
+21. Retention/privacy: stored source/logs/artifacts, secret handling, deletion, historical decisions.
+22. Hosted model: hosted history, customer-controlled storage, private deployment, and self-hosting.
+23. Support: adapter maintenance, incident response, schema changes, and security reports.
+24. Metrics: prevent Goodhart effects and define user outcomes.
 
-Current build-isolation Boolean is caller supplied.
+## Closed strategic decisions
 
-Decision needed: require which attestation predicates, issuers, builder identities, source repositories, workflow identities, and artifact subject digests? Define offline behavior and how unsupported publishers are handled.
-
-Closure evidence: positive and negative signature/identity/subject-mismatch tests against real or controlled attestations.
-
-### P0-3. What does source-to-wheel equivalence mean?
-
-Current comparison checks metadata, package names, and literal exports, not every distributable file.
-
-Decision needed: define path normalization, generated files, platform-specific artifacts, metadata files, license placement, and allowed transformations.
-
-Closure evidence: canonical manifest and hash comparison tests for missing, extra, modified, and intentionally generated files.
-
-### P0-4. How are untrusted candidate packages executed safely?
-
-Current import checks use the installed package in the current interpreter.
-
-Decision needed: define isolated environment, network policy, secret stripping, resource limits, plugin behavior, and disposal lifecycle.
-
-Closure evidence: malicious import and resource-limit tests in an isolated worker.
-
-## P1 — Required for the intended differentiated product
-
-### P1-1. API baseline source
-
-Should the baseline be the latest stable Git tag, the release immediately preceding the candidate, or a policy-configured reference? How should prereleases and maintenance branches be handled?
-
-### P1-2. Public API definition
-
-How should __all__, documented exports, dynamic __getattr__, re-exports, namespaces, overloads, stubs, and behavior contracts contribute to the API surface?
-
-### P1-3. Deprecation policy semantics
-
-How many published releases are required after the first valid warning observation? Does the rule count minor version numbers, distinct published artifacts, or policy-defined release events? How are yanked releases, prereleases, and platform support changes treated?
-
-### P1-4. Warning evidence authenticity
-
-Which CI identities are trusted to assert native-platform observations? How is the workflow, commit, platform, Python implementation/version, matrix row, and release bound to the record? How are reruns and duplicated evidence handled?
-
-### P1-5. SPDX data lifecycle
-
-Which SPDX License List version is pinned? How are updates reviewed? When offline, should unknown identifiers fail or become UNVERIFIED? Which project-specific LicenseRef mappings are permitted?
-
-### P1-6. Type surface scope
-
-Should chipcup require .pyi contract sets at all? If retained, what parser/checker proves their semantic relationship with runtime exports? If no robust proof is planned, remove the subsystem rather than preserve file-presence checks as a type guarantee.
-
-### P1-7. Release tag and version contract
-
-Should tag version, pyproject version, sdist metadata, wheel metadata, installed metadata, and published index metadata be exact canonical matches? Define normalization and prerelease behavior.
-
-### P1-8. Decision and exception authority
-
-Who can approve an exception, how long can it live, what scope can it cover, and how is it revoked? How do organization-level policies compose with project policy?
-
-## P2 — Product and operational design
-
-### P2-1. Evidence storage
-
-Is a local content-addressed directory sufficient for the first usable product, or is a database needed for concurrent repositories, multiple teams, and long history?
-
-### P2-2. Schema compatibility
-
-What is the compatibility policy for evidence, receipt, report, adapter, and policy schemas? Which changes require a new major version?
-
-### P2-3. CI providers
-
-Which provider should be first after GitHub Actions? Preserve provider-neutral identity and job evidence.
-
-### P2-4. Caching
-
-Which adapter results can be reused safely, and which exact input digests, configuration, tool versions, and trust changes invalidate a cached result?
-
-### P2-5. Data retention and privacy
-
-Which evidence is public, private, or sensitive? How are secrets redacted? How are deletions and legal retention requests handled without silently rewriting past decisions?
-
-### P2-6. Product surface
-
-Should the initial developer experience be CLI + GitHub Action only? Do not build a dashboard until the report schema and policy model are stable and a concrete user need exists.
-
-## Closed decisions
-
-### C-1. Do not compress unlike verdicts into one score
-
-The report preserves distinct rule outcomes. The final release decision may be ALLOW, DENY, or APPROVAL_REQUIRED, but must expose all contributing results.
-
-### C-2. Do not treat PEP 387 as a third-party release schedule
-
-PEP 387 describes CPython's backward-compatibility policy. A package's own warning/removal window is a project policy that must be documented as such.
-
-### C-3. Do not treat archive-level License-Expression as a per-file license declaration
-
-Core metadata's License-Expression applies to the distribution archive containing that metadata. Supplemental per-file LicenseRef mappings need their own text and subject checks.
-
-### C-4. Integrate specialist tools before reimplementing them
-
-Use Griffe, packaging, pydistcheck, Twine, SPDX data, and PEP 740 provenance where their capabilities fit. Reimplement only a proven gap with tests and clear boundaries.
+- Change Assurance is a working direction, not proven market differentiation.
+- Python PR-to-release is the first vertical slice, not permanent language scope.
+- No universal graph database in the first version; use typed records and explicit edges.
+- AI is advisory; it cannot establish trust, waive rules, approve, merge, publish, or certify its own changes.
+- Test ranking does not replace policy-required suites.
+- Runtime assurance is deferred.
+- Do not flatten unlike evidence into a scalar score.
+- An assurance dossier is not formal proof or legal compliance certification.

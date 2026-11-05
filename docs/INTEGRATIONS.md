@@ -2,103 +2,102 @@
 
 ## Principle
 
-chipcup should coordinate established tools, not clone them. An integration is valuable only when it provides evidence that chipcup can bind to an exact release subject and evaluate under explicit policy.
+Coordinate specialist evidence; do not clone every specialist tool. A command that runs is not a complete adapter. It must bind output to exact subjects, preserve raw results, validate output, and expose limitations.
 
-Every adapter must record tool name/version, invocation, input subject digests, environment, output digest, raw output reference, normalized findings, and limitations. An adapter failure or unavailable dependency must not be silently converted to PASS.
+## Existing tools and standards
 
-## Existing ecosystem
-
-| Tool or standard | Existing responsibility | Planned chipcup role | Current integration status |
+| Tool / standard | Existing responsibility | Proposed role | Current chipcup status |
 |---|---|---|---|
-| Griffe | Reads Python API structure and compares snapshots for breaking changes | Produce API-change evidence for exact base/candidate refs and connect findings to deprecation policy | NOT IMPLEMENTED |
-| pydistcheck | Inspects distribution archives for packaging, portability, and content issues | Reuse archive-quality findings and bind them to sdist/wheel digests | NOT IMPLEMENTED |
-| Twine | Its check command validates rendering of distribution long descriptions | Keep description-rendering validation as a specialist CI check; do not claim it proves artifact integrity | Invoked by CI, not an evidence adapter |
-| packaging | Implements PEP 440 versions, specifiers, and PEP 508 markers | Use its semantics for deterministic version and marker evidence | Used by current code |
-| SPDX License List | Authoritative versioned list of license and exception identifiers | Validate syntax plus identifiers against a pinned list snapshot | NOT IMPLEMENTED; current custom parser is incomplete |
-| PyPI PEP 740 attestations | Provides signed attestation records associated with uploaded distribution files | Verify attestation subject digest, signer/workflow identity, predicate, and trusted policy | NOT IMPLEMENTED |
-| SLSA provenance | Describes build provenance and the process that produced an artifact | Validate the provenance predicate and trusted builder identity | NOT IMPLEMENTED |
-| mypy | Static type checker | Run as a development quality check; do not substitute it for artifact or runtime API evidence | Used in CI on one Python lane |
-| pytest | Executes project tests | Capture result and environment as CI/test evidence | Used by CI |
+| Griffe | Python API inspection and snapshot comparison | Base/candidate API compatibility evidence | NOT IMPLEMENTED |
+| packaging | PEP 440 and PEP 508 semantics | Deterministic version and marker semantics | USED |
+| pytest | Python test execution | Test result and environment evidence | USED IN CI |
+| mypy | Static type checking | Development quality evidence, not a substitute for API/runtime analysis | USED IN CI |
+| pydistcheck | Distribution structure and portability checks | Archive-quality evidence | NOT IMPLEMENTED |
+| Twine | Distribution-description rendering check | Keep its narrow validation result | USED IN CI |
+| SPDX License List | Versioned license and exception identifier data | Pinned identifier validation | PARTIAL CUSTOM PARSER; NO AUTHORITATIVE LIST PIN |
+| PyPI PEP 740 / Integrity API | Published artifact attestations | Verify subject, issuer, publisher/workflow, predicate | NOT IMPLEMENTED |
+| SLSA provenance | Source/build provenance model | Verify build inputs, builder, source, and output subject | NOT IMPLEMENTED |
+| GitHub Actions | CI jobs, matrix, artifacts, workflow identity | First CI provider adapter | REPOSITORY WORKFLOW ONLY |
+| GitHub CodeQL / code scanning | Security and quality findings on pull requests | Import SARIF/native check evidence | NOT IMPLEMENTED |
+| OpenTelemetry | Vendor-neutral telemetry instrumentation | Possible runtime evidence later | DEFERRED |
+| GUAC | Software supply-chain metadata graph | Optional external relationship source later | DEFERRED |
+
+## Adjacent capabilities — do not clone
+
+Public documentation review on 2026-11-05 identified:
+- GitHub Copilot, Qodo, and Graphite in AI PR review and suggestions;
+- Sourcegraph in code graphs and code context;
+- Launchable in predictive test selection;
+- GitHub CodeQL/code scanning in PR security findings;
+- GUAC in supply-chain relationships.
+
+This is not an independent performance study or exhaustive competitive review. It is sufficient to reject these categories as standalone product differentiation until benchmarking demonstrates otherwise.
+
+References:
+- https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/copilot-code-review
+- https://docs.github.com/en/code-security/concepts/code-scanning/code-scanning-on-pull-requests
+- https://www.qodo.ai/formerly-qodo-merge/
+- https://www.graphite.com/docs/ai-reviews
+- https://help.launchableinc.com/features/predictive-test-selection/
+- https://sourcegraph.com/docs/cody/core-concepts/code-graph
+- https://docs.guac.sh/guac/
+- https://slsa.dev/spec/v1.2/tracks
 
 ## Adapter priorities
 
-### 1. API snapshot adapter
+### Priority 0 — subject and evidence contracts
 
-Use Griffe to load the base and candidate API snapshots, preferably from immutable commits or tags. Preserve:
+Define repository/commit/artifact identity and the versioned evidence envelope before adding analyzers. Every integration depends on these contracts.
 
-- base and candidate commit IDs;
-- package/module search roots;
-- tool version and configuration;
-- serialized API snapshot digests;
-- complete breakage records;
-- exclusions and overrides.
+### Priority 1 — Python vertical slice
 
-Map each finding to the public-API policy. A detected breakage is not automatically a release denial; an approved deprecation path or declared major-version policy may alter the decision.
+1. Griffe for base/candidate API snapshots.
+2. Python package/build inspectors for source, sdist, and wheel manifests.
+3. packaging for version and marker semantics.
+4. pytest and mypy results with environment identity.
+5. Twine description-rendering result with its exact scope.
+6. Version-pinned SPDX License List validation.
+7. PyPI PEP 740/SLSA provenance verification where source/publisher supports it.
 
-Griffe documentation: https://mkdocstrings.github.io/griffe/guide/users/checking/
+### Priority 2 — CI and security findings
 
-### 2. Distribution inspection adapter
+- GitHub workflow/run/job identity;
+- native matrix observations;
+- CodeQL or existing security scanner outputs;
+- SARIF/native check ingestion where available;
+- GitHub check/status publication bound to exact commit.
 
-Use pydistcheck and appropriate wheel/sdist inspectors to detect packaging and portability defects. Keep the raw findings and tool version, then cross-check their artifact subject digests against the exact artifacts being evaluated.
+### Deferred
 
-Do not duplicate every archive rule in chipcup unless there is a demonstrated gap or a required cross-artifact relationship.
+- Launchable-style test prioritization;
+- GUAC ingestion or graph federation;
+- OpenTelemetry/runtime correlation;
+- other SCM/CI providers;
+- second-language analyzers.
 
-pydistcheck documentation: https://pydistcheck.readthedocs.io/en/latest/how-to-test-a-python-distribution.html
+## Adapter contract
 
-### 3. Description validation adapter
+Every adapter declares:
+- adapter ID/version;
+- supported evidence schema versions;
+- supported languages, artifacts, and environments;
+- required input subjects;
+- normalized invocation/configuration digest;
+- producer identity and tool version/container digest;
+- output schema and normalization version;
+- raw output digest and durable reference;
+- findings and completeness state;
+- timeout, resource, retry, and failure semantics;
+- known limitations and unsupported cases.
 
-Twine check should remain responsible for the rendering check it provides. It does not prove complete package metadata correctness, source/wheel parity, or provenance.
+Adapter outputs are evidence; they do not own final policy or approval.
 
-Twine documentation: https://twine.readthedocs.io/en/stable/
+## Integration acceptance tests
 
-### 4. SPDX validation adapter
+Each adapter must test valid positive output, findings, malformed output, wrong-subject output, stale/replayed output, unavailable/timeout/error, incomplete scan, deterministic replay, and raw/normalized digest consistency.
 
-Use a versioned SPDX License List snapshot. Record the list version and digest used by each decision. If the identifier or exception is not in the pinned list, fail or require an explicit LicenseRef mapping according to policy.
+“No findings” is distinct from a failed, timed-out, or partial scan.
 
-If the required list version cannot be obtained or verified, return UNVERIFIED rather than accepting a syntactically plausible identifier.
+## Build-versus-integrate rule
 
-SPDX list: https://spdx.org/licenses/  
-Machine-readable list information: https://github.com/spdx/license-list-data
-
-### 5. Provenance adapter
-
-Consume PyPI's Integrity API and verify accepted PEP 740 attestations. For SLSA provenance, validate the subject digest, builder identity, source repository, source revision, workflow identity, and predicate requirements.
-
-A successful signature check is not sufficient if the identity is not trusted by policy. A valid attestation for a different artifact digest is not evidence for the candidate artifact.
-
-PyPI attestations: https://docs.pypi.org/attestations/  
-PyPI provenance: https://docs.pypi.org/using-pypi/package-security/provenance/
-
-### 6. CI platform adapter
-
-Capture immutable workflow and job identities, commit SHA, job result, matrix environment, artifact IDs/digests, and timestamps. Avoid treating a branch name or mutable job URL as a complete subject identity.
-
-The first provider can be GitHub Actions. Keep the normalized evidence contract provider-neutral so that GitLab or other build systems can be added later.
-
-## Adapter interface requirements
-
-A proposed adapter should expose:
-
-- capability and supported schema versions;
-- input subject requirements;
-- deterministic invocation parameters;
-- output schema validation;
-- raw-output persistence and digest;
-- normalized findings;
-- provenance/trust status;
-- timeout and resource policy;
-- explicit failure and unavailable states.
-
-Adapters must not own final release policy. They provide evidence; the policy engine decides whether that evidence satisfies the project's requirements.
-
-## Integration acceptance criteria
-
-An integration is not complete merely because a command runs. It must:
-
-1. bind output to exact source/artifact subjects;
-2. reject mismatched or missing inputs;
-3. preserve raw output and tool version;
-4. normalize findings without losing source details;
-5. distinguish tool failure, unavailable tool, no findings, and incomplete scan;
-6. have tests using positive, negative, malformed, and mismatched-subject outputs;
-7. provide a reproducible integration example.
+Implement a new analyzer only when a required use case is not covered by established tools, the gap is demonstrated by counterexample or benchmark, the project can define a testable semantic contract, ongoing maintenance is justified, and the output can participate in the evidence model without overstating certainty.

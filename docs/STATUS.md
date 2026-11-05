@@ -1,118 +1,142 @@
 # Status and implementation truth
 
 **Review snapshot:** 2026-11-05  
-**Reviewed main commit:** 7ef2c82fb2ebdf2e08376b154bd6e9f112b6a5ca  
+**Reviewed source branch:** main  
+**Reviewed source commit:** 7ef2c82fb2ebdf2e08376b154bd6e9f112b6a5ca  
 **Distribution version:** 0.1.0  
-**Package maturity:** Alpha
+**Maturity:** Alpha
 
-This document is the source of truth for what the current repository does and does not do. It prevents the target architecture from being mistaken for shipped functionality.
+This document is the source of truth for current repository behavior and the state of the proposals. Target architecture documents do not change implementation status.
 
-## Repository evidence
+## 1. Repository evidence
 
 | Item | Observed state |
 |---|---|
+| Repository | Loofy147/Pre-python |
 | Default branch | main |
-| Latest inspected main commit | 7ef2c82fb2ebdf2e08376b154bd6e9f112b6a5ca |
+| Reviewed main commit | 7ef2c82fb2ebdf2e08376b154bd6e9f112b6a5ca |
 | Main CI run | 42054977699, completed successfully |
-| CI matrix | Python 3.10–3.14 on Ubuntu; Python 3.13 native platform jobs on Ubuntu, Windows, and macOS |
-| Build audit | Builds an sdist, builds a wheel from the sdist, runs Twine description checks, then runs the receipt cycle |
-| Open pull request at snapshot | #4, proposing stable audit exit codes; not merged into the reviewed main commit |
-| GitHub Releases | None found |
-| Git tags | None found |
+| Python CI | 3.10–3.14 on Ubuntu |
+| Native warning jobs | Ubuntu, Windows, macOS with Python 3.13 |
+| Build audit | Builds sdist, wheel from sdist, runs Twine check, then current receipt cycle |
+| GitHub Releases | None found at snapshot |
+| Git tags | None found at snapshot |
 
-The main CI result establishes that the jobs configured in that workflow passed for that commit. It does not establish that the full target architecture is implemented.
+Main CI proves only the jobs and tests configured for that commit.
 
-## Capability status
+## 2. Open pull requests
 
-| Capability | Status | What the current source actually proves |
+### PR #5 — documentation and architecture review
+
+- URL: https://github.com/Loofy147/Pre-python/pull/5
+- Base: main at 7ef2c82fb2ebdf2e08376b154bd6e9f112b6a5ca
+- Previous reviewed head: 0560c36078e7c477f1a7e12958fb4c72932c044d
+- State before this update: open, not merged, mergeable.
+- Previous scope: documentation-only.
+- CI run 42065922153 was queued at the previous head check. Test jobs and Ubuntu/Windows jobs had passed; macOS platform job was still queued.
+
+This update adds documentation and must receive a new CI run. No claim is made here that the new head's CI has passed.
+
+### PR #4 — stable exit-code proposal
+
+- URL: https://github.com/Loofy147/Pre-python/pull/4
+- Base: main at 7ef2c82fb2ebdf2e08376b154bd6e9f112b6a5ca
+- Head commit: f3ac230a077f532d1dc3bf5edad022d7303653b1
+- State at review: open, not merged, mergeable.
+- CI run 42058135115: completed successfully for configured jobs.
+
+Passing CI does not settle the public-contract concerns in ARCHITECTURE_REVIEW.md. The type-surface exit code must not imply semantic stub validation when the current subsystem primarily checks declarations and file presence. Fixture classification and precedence semantics also require review. PR #4 was not modified or merged by this documentation update.
+
+## 3. Current capability register
+
+| Capability | Status | Source-grounded statement |
 |---|---|---|
-| Seven-boundary receipt cycle | IMPLEMENTED, prototype | Runtime composes build, license, type, marker, deprecation, import, version, and cycle-closure receipts |
-| Closed verdict vocabulary | IMPLEMENTED | AuditVerdict is a string enum; BoundaryReceipt rejects non-enum verdict values |
-| Measured teacup fixture | IMPLEMENTED, with robustness defect | Source, sdist, and wheel fixture copies are checked against a golden profile and a derived tolerance |
-| Basic sdist/wheel metadata comparison | IMPLEMENTED, partial | Compares name, version, Requires-Dist, package names, literal public exports, and license metadata |
-| Complete file-content equivalence | NOT IMPLEMENTED | No canonical hash comparison of every distributable source/data member across source, sdist, and wheel |
-| License expression grammar | IMPLEMENTED, partial | A custom parser handles a subset of SPDX expression grammar and LicenseRef mapping |
-| Authoritative SPDX identifier validation | NOT IMPLEMENTED | The parser does not validate identifiers and exceptions against a pinned SPDX License List |
-| License file and fixture-subject coverage | IMPLEMENTED, partial | Checks declared license files and configured subject paths in source and archive manifests |
-| Stub manifest and file presence | IMPLEMENTED, partial | Checks declared paths and py.typed presence; does not establish semantic agreement with runtime contracts |
-| API snapshot comparison across releases | NOT IMPLEMENTED | No Griffe adapter or baseline API snapshot store |
-| Version and environment marker evaluation | IMPLEMENTED, prototype | Uses packaging to evaluate version specifiers and marker rows |
-| Native warning capture | IMPLEMENTED, limited | Captures DeprecationWarning observations on CI native platform jobs |
-| Warning-evidence authenticity | NOT IMPLEMENTED | JSON fields are caller-editable; the loader does not authenticate collector identity or bind the observation to a published artifact |
-| Marker selection validation | IMPLEMENTED, with scope defect | Unknown stub-set validation currently examines every version-in-scope row, including rows whose marker expression evaluates false |
-| Historical deprecation eligibility | NOT IMPLEMENTED, end-to-end | The current CLI supplies only release 0.1.0 as published history and uses a no-removal schedule |
-| Durable evidence history | NOT IMPLEMENTED | Evidence JSON is input/output, not a persistent append-only ledger |
-| Independent build provenance verification | NOT IMPLEMENTED | A command-line flag controls the build-isolation claim; no attestation is verified |
-| PyPI PEP 740 or SLSA verification | NOT IMPLEMENTED | No verifier or PyPI Integrity API adapter is present |
-| Audit of exact installed wheel | NOT IMPLEMENTED | CI installs the checkout in editable mode before building artifacts; it does not install the newly produced wheel in a clean environment for the receipt cycle |
-| Unified execution architecture | INCONSISTENT | runtime.py runs the receipt pipeline; gate.py exposes a separate legacy-style GateRequest/GateReport path |
-| Release decision policy engine | NOT IMPLEMENTED | Current output is a Boolean passed field plus receipts; no distinct ALLOW / DENY / APPROVAL_REQUIRED layer |
-| Comparative differentiation benchmark | NOT IMPLEMENTED | No controlled comparison against the existing ecosystem toolchain |
-| Reusable GitHub Action | NOT IMPLEMENTED | GitHub Actions workflows exist for this repository, not as a reusable published action |
+| Seven-boundary receipt experiment | IMPLEMENTED, prototype | runtime.py composes build, licenses, types, markers, deprecations, imports, versions, and build-cycle closure |
+| Closed verdict vocabulary | IMPLEMENTED | AuditVerdict is a string enum; BoundaryReceipt rejects unregistered verdict values |
+| Measured teacup fixture | IMPLEMENTED, robustness defect | source, sdist, and wheel fixture copies are checked against golden profile and tolerance |
+| Basic sdist/wheel comparison | PARTIAL | selected metadata, package names, literal public exports, and license metadata are compared |
+| Complete source/sdist/wheel file parity | NOT IMPLEMENTED | no canonical hash comparison of every distributable package member |
+| Custom SPDX expression parser | PARTIAL | handles a subset of expression grammar and LicenseRef mapping |
+| Pinned authoritative SPDX identifiers | NOT IMPLEMENTED | no pinned SPDX License List validation |
+| License file/subject coverage | PARTIAL | checks declared license files and configured subjects |
+| Stub manifest/file presence | PARTIAL | checks configured declarations and presence; does not prove runtime semantic agreement |
+| API snapshot comparison across releases | NOT IMPLEMENTED | no Griffe adapter or baseline snapshot store |
+| Version/marker evaluation | IMPLEMENTED, prototype | uses packaging semantics |
+| Native warning capture | IMPLEMENTED, limited | captures DeprecationWarning observations in native platform CI jobs |
+| Warning evidence authenticity | NOT IMPLEMENTED | editable JSON is not independently authenticated or bound to trusted collector identity |
+| Historical removal eligibility | NOT IMPLEMENTED end-to-end | CLI hardcodes published releases to 0.1.0 and uses a no-removal schedule |
+| Durable evidence history | NOT IMPLEMENTED | evidence is file input/output, not append-only ledger |
+| Independent provenance verification | NOT IMPLEMENTED | caller flag controls isolation assertion; no attestation verification |
+| Exact installed-wheel audit | NOT IMPLEMENTED | CI does not install and audit the exact newly produced wheel in a clean environment |
+| Unified execution path | INCONSISTENT | runtime.py receipt pipeline and gate.py GateRequest/GateReport remain separate |
+| General change classification/impact | NOT IMPLEMENTED | no cross-file change model or coverage semantics |
+| Policy-derived obligation compiler | NOT IMPLEMENTED | no deterministic target policy engine |
+| Change Assurance Dossier | NOT IMPLEMENTED | no target evidence/decision schema in code |
+| PR status-check product | NOT IMPLEMENTED | repository CI exists, not reusable product integration |
+| Autonomous repair/runtime assurance | NOT IMPLEMENTED | no such product capability exists |
 
-## Confirmed documentation contradictions
+## 4. Current high-priority code defects
 
-1. README previously described exit code 1 as any failed or unverified verdict and code 3 as a missing module. An open pull request proposes a different detailed exit mapping. The current main CLI remains authoritative until that change is merged and verified.
-2. The package describes seven lifecycle systems, but it has no cross-release API snapshot integration. It must not claim it detects arbitrary API removals across published releases.
-3. The build receipt includes a build-isolation Boolean. That is not an attestation and does not prove provenance by itself. The CLI defaults it to false, but the direct evaluate_artifact_receipt() function currently defaults it to true, creating an unsafe API-level default discrepancy.
-4. The type receipt checks manifest file presence, not semantic equality between .pyi declarations and runtime contract objects.
-5. The deprecation receipt validates warning observations but the CLI hardcodes the published release list to 0.1.0 and uses a schedule with no removal release. Unit tests exercise some removal-window rules, but the end-to-end CLI does not establish a historical removal-eligibility decision. Warning JSON is editable, and the loader does not enforce consistency between emitted and warning_count (or authenticate the claimed native platform).
-6. The release workflow accepts version-shaped tags but contains fixed 0.1.0 paths and warning-evidence arguments. The tag/version relationship is not derived and enforced generically.
-7. Twine's check command should be described as a distribution-description rendering check, not a complete metadata or artifact-integrity validator.
-8. gate.py and runtime.py are separate orchestration paths. The project has not yet declared one as the sole stable API.
+### P0 — Numeric and geometry input safety
 
-## High-priority implementation defects identified by source review
+Geometry parsing accepts invalid numeric forms including non-finite values and Boolean-as-number cases. Reject NaN, positive/negative infinity, booleans, invalid tolerance fractions, zero/negative dimensions, and malformed coordinates before arithmetic.
 
-These are code-review findings, not claims that fixes have already landed.
+### P0 — Provenance false assurance
 
-### P0 — Geometry must fail closed for invalid numbers
+The direct artifact receipt API defaults build isolation to true, while the CLI flag defaults false. A caller assertion is not provenance verification. The API must fail closed and keep the assertion untrusted until a trusted attestation is verified.
 
-The geometry parser uses Python JSON decoding and numeric type checks that accept non-finite float values and Boolean values as numbers. NaN can produce comparison behavior that does not reliably fail a max-deviation check. Reject NaN, positive/negative infinity, booleans, invalid tolerance fractions, zero/negative depth, and malformed coordinates before arithmetic.
+### P0 — Dual execution paths
 
-### P0 — Caller assertions must not become provenance proofs
+runtime.py and gate.py perform separate compositions and report formats. Select one authoritative path; migrate or retire the other with a tested compatibility policy.
 
-The receipt builder accepts a Boolean build-isolation assertion. The CLI exposes this as a flag. Keep this evidence in an asserted/unverified class until build provenance is independently checked against a trusted CI identity and the artifact digest. Also change the direct evaluate_artifact_receipt() default from true to false so callers cannot obtain a verified receipt by omitting the argument.
+### P1 — Artifact completeness
 
-### P1 — Compare actual distributable contents
+Metadata and public-export equality do not prove file-content parity. Define canonical path normalization, generated-file policy, archive limits, and hash comparison across source, sdist, and wheel.
 
-Metadata and __all__ equality do not prove that package source files are byte-identical across the intended source, sdist, and wheel representations. Define canonical package-relative paths and compare file hashes, with explicit policy for generated files, metadata, and platform-specific artifacts.
+### P1 — Exact artifact validation
 
-### P1 — Audit the exact produced artifact
+Install and audit the exact wheel built from the sdist in a clean environment. Verify import origin, metadata, and tested behavior against that artifact.
 
-The current CI installs the checkout with editable mode before building the artifacts. Add a clean isolated environment that installs the exact wheel produced from the sdist, then verifies import origin, installed metadata, and tested public behavior against that wheel.
+### P1 — Type subsystem claims
 
-### P1 — Resolve the type-contract mismatch
+The current stub manifest and file checks do not prove .pyi/runtime semantic agreement. The GPU stub/runtime contract mismatch is a concrete counterexample. Either remove the unsupported stub guarantee or implement and test semantic validation.
 
-The GPU stub declares GpuStubContract, while the runtime STUB_SETS mapping returns AuditReceipt and Reader for the gpu set. The current manifest checks presence, not semantic correspondence. Either implement semantic checks with clear scope or remove the stub system until it has real value.
+### P1 — Marker scope
 
-### P1 — Unify the execution paths
+Validate contract-set availability for selected marker rows, while separately checking policy-required matrix declarations. False marker rows must not be treated as active selections.
 
-Select one authoritative pipeline and define the other as a compatibility wrapper or remove it. The receipt pipeline and GateReport pipeline must not drift in release semantics.
+### P1 — Warning evidence trust
 
-### P1 — Fix marker row scope and validation
+Reject inconsistent emitted/count fields, booleans as integers, duplicate observations, stale rows, and mismatched release/platform/commit identity. Capture and verify trusted CI identity.
 
-The marker receipt currently checks whether every version-in-scope row names a known stub set, even if its PEP 508 expression evaluates false. Validate contract-set availability only for selected rows, while separately enforcing that all policy-required rows are declared. Add false-marker rows with unknown contract names as regression cases.
+### P1 — Release identity
 
-### P1 — Authenticate and validate warning observations
+The workflow accepts version-shaped tags but hardcodes 0.1.0 in build and evidence steps. Derive version from tag and require agreement with project metadata and artifacts before publication.
 
-The current JSON loader trusts editable emitted/platform/release fields and does not require emitted=true to agree with a positive warning_count. It also accepts booleans as integer warning_count values. Validate the data contract, reject duplicates and inconsistent fields, and bind observations to a trusted CI identity, source commit, release, native environment, and matrix row.
+### P2 — SPDX authority
 
-### P1 — Implement real release history
+Pin authoritative SPDX License List data or return UNVERIFIED when identifier validation cannot be performed.
 
-Load published releases and immutable warning observations for every policy-required row. Reject missing, duplicated, stale, forged, or scope-mismatched observations. Calculate a removal decision only after the policy's actual published-release requirements are met.
+### P2 — Archive and execution hardening
 
-### P1 — Derive release identity from the tag
+Bound archive members, expanded size, paths, duplicate names, symlink behavior, and untrusted code execution. Add malicious-input tests.
 
-The release workflow must parse the tag, compare it to pyproject.toml, and use the validated version for every build, evidence, and publication step. A mismatched tag must block release.
+## 5. Target architecture status
 
-### P2 — Validate SPDX identifiers
+The proposed Change Assurance Engine is a design hypothesis. None of the following is implemented by this documentation update:
+- change taxonomy and classifier;
+- impact analysis and coverage evaluator;
+- policy obligation compiler;
+- versioned evidence envelope and append-only history;
+- provenance verifier;
+- decision engine;
+- Change Assurance Dossier;
+- reusable PR integration;
+- second-language adapter;
+- remediation agent or runtime monitor.
 
-The current parser is not an authoritative SPDX identifier validator. Pin a License List version or return UNVERIFIED when the required authoritative data is unavailable. The official list is versioned and machine-readable.
+The strategic decision is a conditional GO for one Python vertical slice, subject to Gate 0 and the experiments in the roadmap.
 
-## Exit-code status
+## 6. Status transition rule
 
-On reviewed main, the CLI returns 0 for a passed report, 1 for a failed report or general audit exception, and 3 when a required module cannot be imported. Invalid argparse input uses argparse's own usage-error behavior. Pull request #4 proposes a more detailed contract; it must be reviewed against this status document and the agreed type-surface scope before merging.
-
-## Review rule
-
-A capability can move from NOT IMPLEMENTED or PARTIAL only when its code, tests, and reproducible evidence exist on a named commit. A passing unit test does not by itself prove provenance, cross-release history, or performance against existing tools.
+A capability moves from NOT IMPLEMENTED or PARTIAL only when code, regression tests, an appropriate CI run, and a reproducible artifact exist on a named commit. Conversation repetition, documentation text, an unrelated passing workflow, or a proposed PR does not upgrade status.

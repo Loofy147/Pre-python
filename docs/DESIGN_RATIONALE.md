@@ -1,79 +1,51 @@
 # Design rationale
 
-## 1. The product thesis
+## From a seven-boundary experiment to change assurance
 
-The project began as a seven-boundary Python packaging/lifecycle experiment. The more valuable direction is an evidence-driven release-assurance coordinator.
+The chipcup prototype organizes release checks around seven receipt boundaries. This was useful for experimenting with typed observations, degraded states, and multi-dimensional reports. It is not sufficient as a long-term product architecture.
 
-The key question is not whether a package has seven checks. It is whether the project can prove that a particular release satisfies the compatibility and supply-chain policy declared for it.
+A product organized only around formal-system categories risks adding modules without solving a distinct user problem. The teacup fixture remains valuable because a measured notch tolerance makes a regression test load-bearing; it is not the product identity.
 
-The product's differentiator, if demonstrated, will be the relationship among API changes, warning history, supported environments, artifacts, provenance, and policy. Individual tools already perform many underlying checks.
+## Why change is the organizing subject
 
-## 2. Why evidence before implementation breadth
+A software change links:
+- source/API compatibility;
+- dependency and license effects;
+- security boundaries;
+- tests and supported environments;
+- build artifacts and provenance;
+- release policy and human approval.
 
-A check is valuable only when its subject and limitations are explicit. For example:
+The user workflow is concrete: before a change is merged or released, what is affected, what must be verified, and what remains unknown?
 
-- “Twine check passed” means the relevant description-rendering check passed; it does not prove complete artifact integrity.
-- “The wheel contains the stub file” proves file presence; it does not prove semantic agreement with runtime contracts.
-- “A warning was recorded in JSON” proves that the JSON contains an observation; it does not authenticate the collector or the environment.
-- “Build isolation was asserted” is not a cryptographic provenance proof.
-- “The sdist and wheel metadata match” does not prove all distributable source files match.
+## Why not another code reviewer
 
-The evidence contract must preserve these distinctions.
+AI review tools already identify issues and suggest fixes. Rebuilding one duplicates findings and does not solve evidence identity or policy replay. Consume their outputs and focus on whether required obligations were satisfied for the actual subject.
 
-## 3. Why results remain multi-dimensional
+## Why not a universal graph first
 
-API compatibility, warning chronology, license validity, marker selection, version policy, artifact integrity, and provenance are different kinds of judgments.
+A graph represents relationships; it does not guarantee that edges are correct or evidence trusted. Existing code-intelligence and supply-chain graph tools cover adjacent territory. Start with typed records and explicit edges. Add graph storage only after query, scale, and retention needs justify it.
 
-One score hides important failures. A release report should preserve each rule result, its evidence, and its scope. A final decision may be single-valued, but the underlying report must not be.
+## Why not an agent-first product
 
-## 4. Existing tools are dependencies, not competitors to rewrite
+Agents are probabilistic and can be influenced by malicious repository content. They may investigate or propose patches, but cannot control policy or certify their own changes. The trusted core must make subject resolution, obligation compilation, evidence validation, and policy evaluation replayable.
 
-Griffe provides API snapshot comparison. pydistcheck and other packaging tools inspect archive quality. packaging implements PEP 440 and PEP 508. Twine provides description rendering checks. SPDX publishes license identifiers. PyPI exposes PEP 740 attestations.
+## Why Python first
 
-chipcup should use these capabilities and add the missing relationships between their outputs. Reimplement a mechanism only when a tested gap requires it.
+The current code and tests provide a Python release-assurance experiment with concrete defects to close. Python-first creates one reference workflow. It does not prove language-neutral design; a second-language pilot must test that assumption.
 
-## 5. The teacup fixture
+## Why an assurance case
 
-The teacup is deliberately load-bearing. fixtures/chip.dat contains the measured payload, and the notch geometry determines a numeric tolerance. The 2.40 mm golden notch produces a 0.12 mm tolerance. This gives the project one simple, falsifiable artifact mutation test.
+No test suite or static analyzer proves arbitrary software correct. A structured dossier can show what was checked, why, against which subject, by which tool/environment, and with what limitations and exceptions. This is more precise than a universal proof or risk score.
 
-The fixture proves that the geometry checker responds to a controlled perturbation. It does not prove artifact parity, provenance, API compatibility, or license correctness. Those claims need their own evidence.
+## Why coverage is explicit
 
-## 6. Seven evaluators are not the final product constraint
+Static dependency and API analysis cannot observe every dynamic behavior. If the system cannot establish its analysis scope, it must report partial/unknown coverage and trigger a conservative fallback rather than imply no impact.
 
-The current seven evaluator modules are useful isolated experiments. The final architecture should be driven by the evidence and dependency model. A new evidence adapter should be added when it contributes a distinct, testable fact or relationship—not because a seven-system taxonomy needs an eighth system.
+## Why test prioritization is optional
 
-## 7. Why an evidence graph is justified
+Predictive selection can reduce feedback time, but selection errors can hide regressions. It may order checks or suggest additional tests. It cannot silently remove policy-required suites or certify full coverage.
 
-A deprecation-removal claim depends on more than a warning function:
+## Why the roadmap is gated
 
-- the API existed in a base release;
-- the candidate changes or removes the API;
-- the project's policy defines required environments;
-- warning observations exist for those environments;
-- the observations refer to published releases or permitted pre-release evidence;
-- the required release interval elapsed;
-- the candidate artifact corresponds to the reviewed source;
-- an approved exception does not alter the decision.
-
-These facts have different subjects and timestamps. A graph of evidence and claims is a natural representation.
-
-## 8. Known architectural debt
-
-The current repository has two orchestration paths: runtime receipt-cycle orchestration and gate.py's GateReport path. It has a type-stub presence system whose manifest does not semantically match its GPU runtime mapping. It relies on a caller-supplied build-isolation flag. It does not retain historical release evidence. The current CI does not install the exact wheel it just built.
-
-These are implementation gaps, not reasons to abandon the product. They are Stage 0 work and must be resolved before the project claims release assurance.
-
-## 9. How to judge whether the project succeeds
-
-The project succeeds only if a reproducible comparative benchmark demonstrates that it adds practical value over the toolchain already available to a Python maintainer.
-
-A distinct result could be a connected finding such as:
-
-- a specific API removal;
-- the exact policy-required platform that did not emit the warning;
-- the release history that fails the removal interval;
-- the candidate wheel digest that would be published;
-- the provenance record or lack of one;
-- the exact policy rule that blocks release.
-
-If the existing tools already detect all the same issues and chipcup adds no useful relationship, the differentiation claim is not established. A convenient aggregator can still be useful, but should be positioned honestly.
+The largest risk is building a broad system whose claims cannot be trusted and whose user value is unproven. Correctness, evidence identity, hostile-execution safety, comparative value, and adoption must precede multi-language support, runtime assurance, hosted graph infrastructure, and autonomous repair.
