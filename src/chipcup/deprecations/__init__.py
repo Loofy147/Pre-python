@@ -221,7 +221,13 @@ def receipt_from_markers(
             "deprecations", "DEPRECATION_WINDOW",
             "selected marker matrix is absent or unverified",
         )
-    selected = tuple(str(item) for item in marker_receipt.evidence.get("selected_rows", []))
+    raw_selected = marker_receipt.evidence.get("selected_rows")
+    if not isinstance(raw_selected, list):
+        return unavailable(
+            "deprecations", "DEPRECATION_WINDOW",
+            "marker receipt does not contain a selected-row list",
+        )
+    selected = tuple(str(item) for item in raw_selected)
     required = tuple(
         row for row in selected
         if row_platforms.get(row) in {"linux", "win32", "darwin"}

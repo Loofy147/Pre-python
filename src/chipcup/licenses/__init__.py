@@ -319,8 +319,12 @@ def receipt_from_build(
         raw_sdist = evidence.get("sdist_members")
         raw_wheel = evidence.get("wheel_members")
         raw_files = evidence.get("license_files")
-        if not all(isinstance(item, list) for item in (raw_sdist, raw_wheel, raw_files)):
-            raise ValueError("build receipt does not contain complete archive manifests")
+        if not isinstance(raw_sdist, list):
+            raise ValueError("build receipt has no source archive manifest")
+        if not isinstance(raw_wheel, list):
+            raise ValueError("build receipt has no wheel archive manifest")
+        if not isinstance(raw_files, list):
+            raise ValueError("build receipt has no License-File metadata")
         members = {
             "sdist": tuple(str(item) for item in raw_sdist),
             "wheel": tuple(str(item) for item in raw_wheel),

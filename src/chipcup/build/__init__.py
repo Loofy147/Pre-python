@@ -448,16 +448,16 @@ def read_artifact_member(path: str | Path, suffix: str) -> bytes:
                 )
             return archive.read(candidates[0])
     with tarfile.open(artifact, "r:*") as archive:
-        candidates = [
+        tar_candidates = [
             member for member in archive.getmembers()
             if member.isfile()
             and member.name.replace("\\\\", "/").endswith(normalized_suffix)
         ]
-        if len(candidates) != 1:
+        if len(tar_candidates) != 1:
             raise ValueError(
                 f"{artifact.name} must contain exactly one {normalized_suffix}"
             )
-        stream = archive.extractfile(candidates[0])
+        stream = archive.extractfile(tar_candidates[0])
         if stream is None:
             raise ValueError(f"cannot read {normalized_suffix} from {artifact.name}")
         return stream.read()
