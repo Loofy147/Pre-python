@@ -38,6 +38,8 @@ The main CI result establishes that the jobs configured in that workflow passed 
 | API snapshot comparison across releases | NOT IMPLEMENTED | No Griffe adapter or baseline API snapshot store |
 | Version and environment marker evaluation | IMPLEMENTED, prototype | Uses packaging to evaluate version specifiers and marker rows |
 | Native warning capture | IMPLEMENTED, limited | Captures DeprecationWarning observations on CI native platform jobs |
+| Warning-evidence authenticity | NOT IMPLEMENTED | JSON fields are caller-editable; the loader does not authenticate collector identity or bind the observation to a published artifact |
+| Marker selection validation | IMPLEMENTED, with scope defect | Unknown stub-set validation currently examines every version-in-scope row, including rows whose marker expression evaluates false |
 | Historical deprecation eligibility | NOT IMPLEMENTED, end-to-end | The current CLI supplies only release 0.1.0 as published history and uses a no-removal schedule |
 | Durable evidence history | NOT IMPLEMENTED | Evidence JSON is input/output, not a persistent append-only ledger |
 | Independent build provenance verification | NOT IMPLEMENTED | A command-line flag controls the build-isolation claim; no attestation is verified |
@@ -52,9 +54,9 @@ The main CI result establishes that the jobs configured in that workflow passed 
 
 1. README previously described exit code 1 as any failed or unverified verdict and code 3 as a missing module. An open pull request proposes a different detailed exit mapping. The current main CLI remains authoritative until that change is merged and verified.
 2. The package describes seven lifecycle systems, but it has no cross-release API snapshot integration. It must not claim it detects arbitrary API removals across published releases.
-3. The build receipt includes a build-isolation Boolean. That is not an attestation and does not prove provenance by itself.
+3. The build receipt includes a build-isolation Boolean. That is not an attestation and does not prove provenance by itself. The CLI defaults it to false, but the direct evaluate_artifact_receipt() function currently defaults it to true, creating an unsafe API-level default discrepancy.
 4. The type receipt checks manifest file presence, not semantic equality between .pyi declarations and runtime contract objects.
-5. The deprecation receipt validates warning observations but the CLI hardcodes the published release list to 0.1.0 and uses a schedule with no removal release. Unit tests exercise some removal-window rules, but the end-to-end CLI does not establish a historical removal-eligibility decision.
+5. The deprecation receipt validates warning observations but the CLI hardcodes the published release list to 0.1.0 and uses a schedule with no removal release. Unit tests exercise some removal-window rules, but the end-to-end CLI does not establish a historical removal-eligibility decision. Warning JSON is editable, and the loader does not enforce consistency between emitted and warning_count (or authenticate the claimed native platform).
 6. The release workflow accepts version-shaped tags but contains fixed 0.1.0 paths and warning-evidence arguments. The tag/version relationship is not derived and enforced generically.
 7. Twine's check command should be described as a distribution-description rendering check, not a complete metadata or artifact-integrity validator.
 8. gate.py and runtime.py are separate orchestration paths. The project has not yet declared one as the sole stable API.
@@ -69,7 +71,7 @@ The geometry parser uses Python JSON decoding and numeric type checks that accep
 
 ### P0 — Caller assertions must not become provenance proofs
 
-The receipt builder accepts a Boolean build-isolation assertion. The CLI exposes this as a flag. Keep this evidence in an asserted/unverified class until build provenance is independently checked against a trusted CI identity and the artifact digest.
+The receipt builder accepts a Boolean build-isolation assertion. The CLI exposes this as a flag. Keep this evidence in an asserted/unverified class until build provenance is independently checked against a trusted CI identity and the artifact digest. Also change the direct evaluate_artifact_receipt() default from true to false so callers cannot obtain a verified receipt by omitting the argument.
 
 ### P1 — Compare actual distributable contents
 
@@ -86,6 +88,14 @@ The GPU stub declares GpuStubContract, while the runtime STUB_SETS mapping retur
 ### P1 — Unify the execution paths
 
 Select one authoritative pipeline and define the other as a compatibility wrapper or remove it. The receipt pipeline and GateReport pipeline must not drift in release semantics.
+
+### P1 — Fix marker row scope and validation
+
+The marker receipt currently checks whether every version-in-scope row names a known stub set, even if its PEP 508 expression evaluates false. Validate contract-set availability only for selected rows, while separately enforcing that all policy-required rows are declared. Add false-marker rows with unknown contract names as regression cases.
+
+### P1 — Authenticate and validate warning observations
+
+The current JSON loader trusts editable emitted/platform/release fields and does not require emitted=true to agree with a positive warning_count. It also accepts booleans as integer warning_count values. Validate the data contract, reject duplicates and inconsistent fields, and bind observations to a trusted CI identity, source commit, release, native environment, and matrix row.
 
 ### P1 — Implement real release history
 
