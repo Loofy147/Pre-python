@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from chipcup._contracts import MatrixRow, WarningObservation
+from chipcup._contracts import AuditVerdict, MatrixRow, WarningObservation
 
 
 def run_receipt_cycle(
@@ -97,14 +97,14 @@ def run_receipt_cycle(
     }
 
 
-def degraded_operation_matrix() -> Mapping[str, str]:
+def degraded_operation_matrix() -> Mapping[str, AuditVerdict]:
     """CI-visible names for the seven absence verdicts."""
     return {
-        "build": "BUILD_PROVENANCE",
-        "licenses": "LICENSE_COVERAGE",
-        "types": "TYPE_SURFACE",
-        "markers": "MARKER_MATRIX",
-        "deprecations": "DEPRECATION_WINDOW",
-        "imports": "IMPORT_AUDIT",
-        "versions": "VERSION_HISTORY",
+        "build": AuditVerdict.BUILD_PROVENANCE,
+        "licenses": AuditVerdict.LICENSE_COVERAGE,
+        "types": AuditVerdict.TYPE_SURFACE,
+        "markers": AuditVerdict.MARKER_MATRIX,
+        "deprecations": AuditVerdict.DEPRECATION_WINDOW,
+        "imports": AuditVerdict.IMPORT_AUDIT,
+        "versions": AuditVerdict.VERSION_HISTORY,
     }
