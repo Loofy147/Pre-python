@@ -32,7 +32,7 @@ The edges are runtime receipt dependencies, not evaluator imports. Each evaluato
 
 ## Seven systems and verdicts
 
-Each evaluator reports a named result: `BUILD_PROVENANCE`, `LICENSE_COVERAGE`, `TYPE_SURFACE`, `MARKER_MATRIX`, `DEPRECATION_WINDOW`, `IMPORT_AUDIT` and `VERSION_HISTORY`. A receipt state is `PASS`, `FAIL`, `UNVERIFIED` or `NOT_APPLICABLE`. Missing evidence is never silently promoted to PASS.
+Each evaluator reports a named result: `BUILD_PROVENANCE`, `LICENSE_COVERAGE`, `TYPE_SURFACE`, `MARKER_MATRIX`, `DEPRECATION_WINDOW`, `IMPORT_AUDIT` and `VERSION_HISTORY`. A receipt state is `PASS`, `FAIL`, `UNVERIFIED` or `NOT_APPLICABLE`. Missing evidence is never silently promoted to PASS. All named boundary and fixture verdicts are members of `chipcup._contracts.AuditVerdict`, a closed `str` enum; `BoundaryReceipt` rejects unregistered strings and serializes the enum's stable value.
 
 ## Build and fixture geometry
 
