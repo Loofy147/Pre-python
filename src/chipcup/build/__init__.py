@@ -30,7 +30,7 @@ __all__ = [
     "inspect_artifact",
     "require_license_coverage",
     "close_version_cycle",
-    "degraded_receipt",
+    "degraded_build_receipt",
     "evaluate_artifact_receipt",
     "measure_notch",
     "read_artifact_member",
@@ -674,5 +674,5 @@ def close_version_cycle(
     )
 
 
-def degraded_receipt() -> BoundaryReceipt:
+def degraded_build_receipt() -> BoundaryReceipt:
     return unavailable("build", AuditVerdict.BUILD_PROVENANCE, "build inputs or provenance evidence are unavailable")
