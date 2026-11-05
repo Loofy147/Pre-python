@@ -114,12 +114,12 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        rows = load_matrix(args.matrix)
-        observations = load_warning_observations(args.warning_evidence)
-        # This is the sole lazy evaluator import. Removing it leaves the
-        # installed console entry point without its receipt-cycle dispatcher.
+        # This is the sole lazy evaluator import. It happens before file I/O,
+        # but only after the installed console target has entered main().
         from chipcup.runtime import run_receipt_cycle
 
+        rows = load_matrix(args.matrix)
+        observations = load_warning_observations(args.warning_evidence)
         report = run_receipt_cycle(
             sdist_path=args.sdist,
             wheel_path=args.wheel,

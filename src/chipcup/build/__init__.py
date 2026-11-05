@@ -499,6 +499,8 @@ def measure_notch(profile: bytes | str) -> dict[str, float]:
     decoded = json.loads(profile.decode("utf-8") if isinstance(profile, bytes) else profile)
     if not isinstance(decoded, dict):
         raise ValueError("fixture profile must be a JSON object")
+    if decoded.get("object") != "teacup":
+        raise ValueError("golden payload object must be a teacup")
     left, right, notch_left, apex, notch_right = _profile_points(decoded)
     if right[0] == left[0]:
         raise ValueError("rim reference line must have non-zero horizontal span")
@@ -510,9 +512,9 @@ def measure_notch(profile: bytes | str) -> dict[str, float]:
     if depth <= 0:
         raise ValueError("notch apex must be below the rim reference line")
     return {
-        "notch_depth_mm": depth,
-        "notch_width_mm": notch_right[0] - notch_left[0],
-        "tolerance_mm": depth * fraction,
+        "notch_depth_mm": round(depth, 6),
+        "notch_width_mm": round(notch_right[0] - notch_left[0], 6),
+        "tolerance_mm": round(depth * fraction, 6),
     }
 
 
@@ -527,6 +529,8 @@ def validate_notch_profile(
     decoded = json.loads(profile.decode("utf-8") if isinstance(profile, bytes) else profile)
     if not isinstance(decoded, dict):
         raise ValueError("fixture profile must be a JSON object")
+    if decoded.get("object") != "teacup":
+        raise ValueError("golden payload object must be a teacup")
     expected_document = dict(golden)
     expected_document["schema"] = "chipcup-rim-profile/v1"
     expected = _profile_points(expected_document)
@@ -542,7 +546,7 @@ def validate_notch_profile(
     fraction = golden.get("tolerance_fraction_of_notch_depth", 0.05)
     if not isinstance(fraction, (int, float)) or fraction <= 0:
         raise ValueError("golden tolerance fraction must be positive")
-    tolerance = expected_depth * float(fraction)
+    tolerance = round(expected_depth * float(fraction), 6)
     deviations = tuple(
         math.hypot(found[0] - target[0], found[1] - target[1])
         for found, target in zip(actual[2:], expected[2:])
@@ -555,10 +559,10 @@ def validate_notch_profile(
             if maximum <= tolerance
             else "FIXTURE_GEOMETRY_OUT_OF_TOLERANCE"
         ),
-        "expected_notch_depth_mm": expected_depth,
+        "expected_notch_depth_mm": round(expected_depth, 6),
         "tolerance_mm": tolerance,
-        "maximum_point_deviation_mm": maximum,
-        "point_deviations_mm": list(deviations),
+        "maximum_point_deviation_mm": round(maximum, 6),
+        "point_deviations_mm": [round(item, 6) for item in deviations],
     }
 
 

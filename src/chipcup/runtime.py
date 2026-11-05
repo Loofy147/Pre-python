@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 from typing import Mapping, Sequence
 
+from chipcup._contracts import MatrixRow, WarningObservation
+
 
 def run_receipt_cycle(
     *,
