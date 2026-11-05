@@ -14,7 +14,7 @@ from typing import Callable, Mapping, Sequence
 from packaging.version import Version
 
 from chipcup._contracts import (
-    BoundaryReceipt, ReceiptState, WarningObservation, unavailable,
+    AuditVerdict, BoundaryReceipt, ReceiptState, WarningObservation, unavailable,
 )
 
 __all__ = [
@@ -218,13 +218,13 @@ def receipt_from_markers(
     """Start removal clocks only from selected rows with real warning observations."""
     if marker_receipt is None or marker_receipt.state is not ReceiptState.PASS:
         return unavailable(
-            "deprecations", "DEPRECATION_WINDOW",
+            "deprecations", AuditVerdict.DEPRECATION_WINDOW,
             "selected marker matrix is absent or unverified",
         )
     raw_selected = marker_receipt.evidence.get("selected_rows")
     if not isinstance(raw_selected, list):
         return unavailable(
-            "deprecations", "DEPRECATION_WINDOW",
+            "deprecations", AuditVerdict.DEPRECATION_WINDOW,
             "marker receipt does not contain a selected-row list",
         )
     selected = tuple(str(item) for item in raw_selected)
@@ -234,7 +234,7 @@ def receipt_from_markers(
     )
     if not required:
         return unavailable(
-            "deprecations", "DEPRECATION_WINDOW",
+            "deprecations", AuditVerdict.DEPRECATION_WINDOW,
             "no supported native platform row was selected",
         )
     schedule = DeprecationSchedule(
@@ -248,7 +248,7 @@ def receipt_from_markers(
     )
     state = ReceiptState.PASS if result.passed else ReceiptState.FAIL
     return BoundaryReceipt(
-        "deprecations", "DEPRECATION_WINDOW", state,
+        "deprecations", AuditVerdict.DEPRECATION_WINDOW, state,
         {
             "required_rows": list(required),
             "effective_warning_releases": dict(result.effective_warning_releases),
@@ -261,4 +261,4 @@ def receipt_from_markers(
 
 
 def degraded_receipt() -> BoundaryReceipt:
-    return unavailable("deprecations", "DEPRECATION_WINDOW", "selected marker rows or native warning evidence are unavailable")
+    return unavailable("deprecations", AuditVerdict.DEPRECATION_WINDOW, "selected marker rows or native warning evidence are unavailable")
