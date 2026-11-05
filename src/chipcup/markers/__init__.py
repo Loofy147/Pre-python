@@ -20,7 +20,7 @@ __all__ = [
     "MarkerPolicy",
     "MarkerRow",
     "evaluate_matrix",
-    "degraded_receipt",
+    "degraded_marker_receipt",
     "receipt_from_types",
 ]
 
@@ -163,5 +163,5 @@ def receipt_from_types(
         )
 
 
-def degraded_receipt() -> BoundaryReceipt:
+def degraded_marker_receipt() -> BoundaryReceipt:
     return unavailable("markers", AuditVerdict.MARKER_MATRIX, "typed stub contract receipt is unavailable")
