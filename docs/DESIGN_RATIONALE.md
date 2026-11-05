@@ -1,46 +1,79 @@
-# Design rationale and adversarial review
+# Design rationale
 
-## Why seven evaluators remain separate
+## 1. The product thesis
 
-The seven boundaries consume different evidence and emit distinct failure modes: module identity, version ordering/specifier membership, marker truth, static type judgments, artifact metadata and payload facts, SPDX/file coverage, and warning chronology. A shared receipt envelope permits orchestration but does not collapse these verdicts into one score.
+The project began as a seven-boundary Python packaging/lifecycle experiment. The more valuable direction is an evidence-driven release-assurance coordinator.
 
-## Delta over existing tools
+The key question is not whether a package has seven checks. It is whether the project can prove that a particular release satisfies the compatibility and supply-chain policy declared for it.
 
-- Griffe reports API additions/removals; chipcup binds an API change to native warning observations and the exact wheel that ships the replacement.
-- mypy proves static typing judgments; chipcup additionally checks the declared stub set is physically present in the wheel and within the licence coverage evidence.
-- Twine validates distribution metadata; chipcup compares source/wheel payloads and joins the results to marker-selected warnings and API lifecycle state.
-- packaging implements PEP 440/508; chipcup retains version and marker decisions as linked receipts that select subsequent evidence checks.
+The product's differentiator, if demonstrated, will be the relationship among API changes, warning history, supported environments, artifacts, provenance, and policy. Individual tools already perform many underlying checks.
 
-## Reducibility counterexamples
+## 2. Why evidence before implementation breadth
 
-- An identical marker matrix can have missing or emitted warning observations; marker truth does not encode deprecation chronology.
-- One module object can retain identity while its imported version violates a release specifier; import identity does not encode PEP 440 matching.
-- An identical archive member list can have different SPDX expressions; build inventory does not encode licence semantics.
-- A passing SPDX declaration can coexist with a missing stub file; licence resolution does not prove a typed API exists.
-- A passing type contract can coexist with a false platform marker; typing does not encode environment evaluation.
-- An identical release schedule can coexist with two different module identities; PEP 387-style chronology does not encode import cache identity.
-- A passing version specifier can describe an artifact whose sdist/wheel metadata diverges; PEP 440 does not encode PEP 517 build consistency.
+A check is valuable only when its subject and limitations are explicit. For example:
 
-These are testable counterexamples, not a claim that the governing PEPs mandate chipcup's software decomposition.
+- “Twine check passed” means the relevant description-rendering check passed; it does not prove complete artifact integrity.
+- “The wheel contains the stub file” proves file presence; it does not prove semantic agreement with runtime contracts.
+- “A warning was recorded in JSON” proves that the JSON contains an observation; it does not authenticate the collector or the environment.
+- “Build isolation was asserted” is not a cryptographic provenance proof.
+- “The sdist and wheel metadata match” does not prove all distributable source files match.
 
-## Geometry as a load-bearing fixture
+The evidence contract must preserve these distinctions.
 
-The golden fixture is not a metaphor. `fixtures/chip.dat` contains measured rim and notch coordinates. The golden depth is 2.40 mm, and five percent of that depth gives a 0.12 mm tolerance. Source, sdist and wheel payloads are checked against the same golden coordinates. CI proves that a 0.05 mm perturbation remains in tolerance and a 0.13 mm perturbation fails.
+## 3. Why results remain multi-dimensional
 
-## License paradox
+API compatibility, warning chronology, license validity, marker selection, version policy, artifact integrity, and provenance are different kinds of judgments.
 
-PEP 639's archive-level `License-Expression` cannot by itself express a separate per-file grant. The distribution remains MIT. A supplemental SPDX `LicenseRef-Fixture-Dual` record resolves to shipped text and identifies the fixture subject; CI validates both the License-File and subject path in both artifacts. This is project metadata, not a claim that the core metadata field scopes expressions to paths.
+One score hides important failures. A release report should preserve each rule result, its evidence, and its scope. A final decision may be single-valued, but the underlying report must not be.
 
-## Breaking-change boundary
+## 4. Existing tools are dependencies, not competitors to rewrite
 
-The version floor and the marker environment can be changed without renaming a symbol. A new release can raise a dependency specifier while a PEP 508 row controls which supported environment receives that dependency. The stable public name remains available through the compatibility window.
+Griffe provides API snapshot comparison. pydistcheck and other packaging tools inspect archive quality. packaging implements PEP 440 and PEP 508. Twine provides description rendering checks. SPDX publishes license identifiers. PyPI exposes PEP 740 attestations.
 
-## Weakest edge and likely collapse
+chipcup should use these capabilities and add the missing relationships between their outputs. Reimplement a mechanism only when a tested gap requires it.
 
-The weakest edge is licenses → types: an archive-level distribution expression may be too coarse to answer a future organization’s file-level policy. The typed evaluator therefore requires an explicit stub manifest and a verified license receipt before considering contract sets available.
+## 5. The teacup fixture
 
-The most likely collapse is deprecations into versions. Both observe release chronology, but they differ whenever a warning shipped without being executed on a required target platform. A falsification test holds release history constant while varying native warning observations; if the deprecation verdict does not change, the boundary has no distinct operational value.
+The teacup is deliberately load-bearing. fixtures/chip.dat contains the measured payload, and the notch geometry determines a numeric tolerance. The 2.40 mm golden notch produces a 0.12 mm tolerance. This gives the project one simple, falsifiable artifact mutation test.
 
-## Open-ended research question
+The fixture proves that the geometry checker responds to a controlled perturbation. It does not prove artifact parity, provenance, API compatibility, or license correctness. Those claims need their own evidence.
 
-If a platform marker stops selecting an environment while its previously emitted warning remains in the release history, can the import evaluator safely expose a PEP 562 deprecated alias, or does the removal clock remain blocked by the PEP 387-informed project policy?
+## 6. Seven evaluators are not the final product constraint
+
+The current seven evaluator modules are useful isolated experiments. The final architecture should be driven by the evidence and dependency model. A new evidence adapter should be added when it contributes a distinct, testable fact or relationship—not because a seven-system taxonomy needs an eighth system.
+
+## 7. Why an evidence graph is justified
+
+A deprecation-removal claim depends on more than a warning function:
+
+- the API existed in a base release;
+- the candidate changes or removes the API;
+- the project's policy defines required environments;
+- warning observations exist for those environments;
+- the observations refer to published releases or permitted pre-release evidence;
+- the required release interval elapsed;
+- the candidate artifact corresponds to the reviewed source;
+- an approved exception does not alter the decision.
+
+These facts have different subjects and timestamps. A graph of evidence and claims is a natural representation.
+
+## 8. Known architectural debt
+
+The current repository has two orchestration paths: runtime receipt-cycle orchestration and gate.py's GateReport path. It has a type-stub presence system whose manifest does not semantically match its GPU runtime mapping. It relies on a caller-supplied build-isolation flag. It does not retain historical release evidence. The current CI does not install the exact wheel it just built.
+
+These are implementation gaps, not reasons to abandon the product. They are Stage 0 work and must be resolved before the project claims release assurance.
+
+## 9. How to judge whether the project succeeds
+
+The project succeeds only if a reproducible comparative benchmark demonstrates that it adds practical value over the toolchain already available to a Python maintainer.
+
+A distinct result could be a connected finding such as:
+
+- a specific API removal;
+- the exact policy-required platform that did not emit the warning;
+- the release history that fails the removal interval;
+- the candidate wheel digest that would be published;
+- the provenance record or lack of one;
+- the exact policy rule that blocks release.
+
+If the existing tools already detect all the same issues and chipcup adds no useful relationship, the differentiation claim is not established. A convenient aggregator can still be useful, but should be positioned honestly.

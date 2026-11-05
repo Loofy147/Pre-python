@@ -1,65 +1,198 @@
-# Architecture and evidence contract
+# Architecture
 
-## Problem
+## 1. Product boundary
 
-API snapshot tools, type checkers and archive validators prove different parts of a release. chipcup binds their evidence to the exact sdist and wheel so a removal decision can be traced to warnings emitted on the required platforms, typed contract files shipped in the wheel, and licence data present in both artifacts.
+chipcup is intended to be an evidence-coordinating release-assurance system for Python distributions.
 
-## Runtime dependency order
+It should answer:
 
-```text
-build → licenses → types → markers → deprecations → imports → versions → build
-```
+**Does this exact candidate release satisfy this exact, versioned compatibility and release policy, based on evidence whose subject, origin, scope, and freshness can be checked?**
 
-The edges are runtime receipt dependencies, not evaluator imports. Each evaluator consumes a neutral immutable receipt from `chipcup._contracts` and returns its own receipt. The runtime orchestrator alone sequences evaluators.
+It is not intended to replace specialist packaging, API, static-analysis, licensing, or provenance tools. It should integrate them and preserve relationships among their outputs.
 
-| Edge | Receipt passed | Why the downstream boundary needs it |
+The current implementation is an Alpha prototype. This document describes the current source separately from the target architecture.
+
+## 2. Current implementation architecture
+
+### 2.1 Package layout
+
+The repository is named Pre-python. Its distribution/import package is chipcup.
+
+The current evaluator packages are:
+
+- build: sdist/wheel metadata, selected contents, build metadata, and teacup fixture geometry;
+- licenses: SPDX-like expression parsing, LicenseRef mapping, and declared file/subject coverage;
+- types: public protocol experiments, stub manifest, stub-file presence, and selected type-surface checks;
+- markers: PEP 508 environment and extra evaluation;
+- deprecations: DeprecationWarning observations and configured warning/removal schedules;
+- imports: module identity, public names, namespace discovery, and entry-point discovery;
+- versions: PEP 440 version parsing, comparison, specifier membership, and marker-row scope selection.
+
+The evaluator modules exchange neutral receipt types from chipcup._contracts.
+
+### 2.2 Current receipt execution
+
+The CLI imports runtime lazily from main(). runtime.run_receipt_cycle then imports evaluator functions inside the orchestration call and runs:
+
+    build → licenses → types → markers → deprecations → imports → versions → build-cycle-closure
+
+The cycle-closure receipt compares the artifact release version with the installed distribution version. The receipt envelope contains a boundary name, a closed AuditVerdict, a ReceiptState, evidence, and issues.
+
+The operational states are:
+
+- PASS: the boundary's implemented checks pass;
+- FAIL: implemented checks find a failure;
+- UNVERIFIED: required evidence or prerequisites are absent or untrusted;
+- NOT_APPLICABLE: a policy-controlled boundary is explicitly not applicable.
+
+A missing prerequisite must never be transformed into PASS.
+
+### 2.3 Parallel legacy path
+
+gate.py separately exposes GateRequest, GateReport, and evaluate_release. It executes the same named domains through a different orchestration path and has a different report structure.
+
+This is an architectural inconsistency. The target design requires one authoritative execution path and one versioned output contract. Until that is implemented, consumers should not assume that the legacy GateReport and receipt-cycle CLI have identical semantics.
+
+### 2.4 The teacup fixture
+
+fixtures/chip.dat is an actual input to the build evaluator. fixtures/golden-profile.json defines the golden rim and notch coordinates. The golden notch depth is 2.40 mm; the tolerance is five percent, or 0.12 mm. Source, sdist, and wheel fixture payloads are checked against the golden reference.
+
+The fixture is a useful deterministic geometry mutation test. It is not a proxy for package integrity generally and should not drive the product architecture.
+
+## 3. Current evidence boundaries and limitations
+
+| Boundary | Current evidence | Important limit |
 |---|---|---|
-| build → licenses | exact sdist/wheel member lists and Core Metadata | licence coverage must inspect the artifacts already built, not request a rebuild |
-| licenses → types | validated license expression, License-File and LicenseRef coverage | typed stub files are accepted only when they exist in the distribution under resolved licence coverage |
-| types → markers | declared contract-set IDs and wheel stub paths | marker rows may select only contracts present in the verified stub manifest |
-| markers → deprecations | selected row IDs and target platforms | removal windows require actual warning observations on each selected required platform |
-| deprecations → imports | verified warning-window state | import audit checks the public alias state only after the removal policy is known |
-| imports → versions | canonical module identity and imported version source | PEP 440 compares the version attached to the imported package with installed metadata |
-| versions → build | installed version and specifier verdict | the build boundary closes by checking that the exact artifacts identify the same release |
+| Build | Archive metadata, package names, literal exports, hashes of whole archive files, selected fixture payloads | Does not prove all package files match source-to-sdist-to-wheel |
+| License | License-Expression/License-File values, source files, archive member names, configured LicenseRef subject paths | Does not validate identifiers against a versioned SPDX registry or establish legal interpretation |
+| Types | Stub manifest and declared paths in source/wheel; some runtime protocol experiments | Does not prove stub declarations are semantically equivalent to runtime contracts |
+| Markers | PEP 508 expression and explicit environment/extra rows, filtered by PEP 440 specifier | Requires an explicit policy for which rows are required; currently selected-row evidence is limited |
+| Deprecations | JSON observations with release, row, platform, selected, emitted, and count fields | No immutable history or independent proof of observation origin; CLI history is fixed to one release |
+| Imports | Import identity and public-name checks in the current process | Importing candidate package code is not isolated from the current process |
+| Versions | Imported version and installed distribution metadata are compared to a specifier | CI installs the checkout editable; it does not prove the exact newly built wheel was installed |
 
-### Import boundaries
+The detailed inventory is in STATUS.md.
 
-- Seven evaluators may import `chipcup._contracts`, standard-library modules and external libraries. They may not import another evaluator.
-- `chipcup.runtime` imports evaluators inside `run_receipt_cycle`; it does not import them at module load.
-- `chipcup.cli` imports `chipcup.runtime` only inside `main()`. CI asserts that importing the console module alone does not load the runtime or evaluator packages.
-- PEP 562 remains the root package's lazy attribute mechanism. PEP 420 namespace discovery is separately exercised by the import evaluator.
-- The only lazy module import required to launch the audit is the `main() → runtime` boundary. Removing it leaves the console entry point without its dispatcher while preserving an importable CLI module.
+## 4. Target architecture
 
-## Seven systems and verdicts
+The finished system should use six layers.
 
-Each evaluator reports a named result: `BUILD_PROVENANCE`, `LICENSE_COVERAGE`, `TYPE_SURFACE`, `MARKER_MATRIX`, `DEPRECATION_WINDOW`, `IMPORT_AUDIT` and `VERSION_HISTORY`. A receipt state is `PASS`, `FAIL`, `UNVERIFIED` or `NOT_APPLICABLE`. Missing evidence is never silently promoted to PASS. All named boundary and fixture verdicts are members of `chipcup._contracts.AuditVerdict`, a closed `str` enum; `BoundaryReceipt` rejects unregistered strings and serializes the enum's stable value.
+### Layer 1 — Release subject and inputs
 
-## Build and fixture geometry
+Resolve the exact subjects under evaluation:
 
-The build evaluator inspects an sdist and wheel without extracting them. It compares project identity, version, `Requires-Dist`, package names, public exports, licence metadata and backend/version provenance. It reads `fixtures/chip.dat` from the source, sdist and wheel.
+- repository and source commit;
+- base API reference and candidate API reference;
+- project metadata and policy version;
+- source distribution and wheel digests;
+- installed distribution identity;
+- platform and environment matrix;
+- published release history;
+- external evidence such as build attestations and CI runs.
 
-The golden rim is the line through `(-3, 12)` and `(3, 12)` mm. The notch apex is `(0, 9.6)` mm, giving depth 2.40 mm. The allowed point deviation is five percent of depth: 0.12 mm. Every notch point is compared by Euclidean distance with the reference profile. The wheel and sdist must also contain the golden reference. The tests perturb the apex by 0.05 mm and 0.13 mm and assert pass/fail respectively.
+Every subject must have a stable identifier. A version string alone is insufficient to identify an artifact.
 
-## Licences and typed stubs
+### Layer 2 — Evidence adapters
 
-The distribution expression is MIT. The fixture has a supplemental file-scoped grant mapping `LicenseRef-Fixture-Dual → LICENSES/Fixture-Dual.txt → fixtures/chip.dat`. The checker confirms the mapping text and subject file appear in source, sdist and wheel. It does not claim PEP 639 natively assigns an expression to an individual path.
+Adapters retrieve or execute specialist evidence producers. Initial candidates:
 
-`src/chipcup/stub-contracts.json` declares four contract sets. Every path must exist in source and wheel; `py.typed` must ship. The distribution-level MIT licence applies to those stub files. PEP 695 syntax is exercised in the Python 3.12+ test lane while the installed package retains its Python 3.10 floor.
+- Griffe for API snapshot comparison;
+- pydistcheck and wheel/manifest tools for distribution structure;
+- packaging for PEP 440 and PEP 508 semantics;
+- Twine for description rendering;
+- a version-pinned SPDX License List for identifier validation;
+- PyPI PEP 740/SLSA attestation verification for provenance;
+- CI platform records for job and environment identity.
 
-## Warning chronology
+Adapters must preserve source version, arguments, raw outputs, timestamps, subject digests, and failure details. An adapter must not convert a missing external tool or failed fetch into a passing result.
 
-A marker simulation is not a warning observation. The platform collector invokes the public deprecated alias on the native CI OS and records the release, matrix row, platform, and whether a warning was emitted. The removal policy uses the latest first-observed release among required rows. A required row without an emitted warning blocks the window.
+### Layer 3 — Canonical evidence model
 
-PEP 387 describes CPython's compatibility policy. chipcup's third-party project rule is an explicitly chosen one-published-minor-cycle requirement.
+Normalize adapter outputs into a versioned evidence envelope. Preserve raw source references and cryptographic digests. Evidence should be immutable after ingestion; corrections create superseding evidence rather than overwriting history.
 
-## Degraded operation
+See EVIDENCE_MODEL.md.
 
-Each evaluator exports a uniquely named degraded receipt helper: `degraded_build_receipt`, `degraded_license_receipt`, `degraded_type_receipt`, `degraded_marker_receipt`, `degraded_deprecation_receipt`, `degraded_import_receipt` and `degraded_version_receipt`. Each result carries its boundary verdict with `UNVERIFIED` state. A missing prerequisite receipt also produces the same boundary-specific unverified result. CI invokes each helper and verifies the state/verdict pair. The runtime refuses to interpret an upstream `UNVERIFIED` or `FAIL` receipt as a downstream pass.
+### Layer 4 — Claim and relationship engine
 
-## Falsification tests
+Represent claims as objects with explicit scope and evidence references.
 
-- `test_reducibility_counterexamples_preserve_distinct_failure_modes` gives the marker, warning, import, version, build and SPDX checks independently varying evidence.
-- `test_no_evaluator_imports_another_evaluator` and `scripts/check_import_boundary.py` detect hidden evaluator import edges.
-- `test_cli_module_does_not_import_runtime_until_main_entry` verifies lazy CLI loading.
-- `test_notch_perturbation_uses_derived_tolerance` verifies the fixture has a measurable effect.
-- `test_each_boundary_has_an_explicit_degraded_verdict` forces all seven degraded states.
+Relationships include:
+
+- supports: evidence supports a claim;
+- contradicts: evidence conflicts with a claim or other evidence;
+- derived_from: a derived observation depends on parent evidence;
+- scoped_to: evidence applies only to a named subject, release, platform, or policy;
+- supersedes: a newer evidence item replaces an older item for a stated purpose;
+- reproduces: a run independently reproduces a previous result.
+
+Repeated conversation, duplicated logs, or repeated assertions must not upgrade evidence status.
+
+### Layer 5 — Policy evaluator
+
+Evaluate an explicit, versioned policy over claims and evidence. Each rule states required inputs, applicable subjects, evaluation semantics, allowed exceptions, and what happens when evidence is absent.
+
+The evaluator must preserve unlike verdicts. It must not compress version, API, licensing, platform, and provenance results into one score.
+
+See POLICY_MODEL.md.
+
+### Layer 6 — Decision and report
+
+Return a structured decision:
+
+- ALLOW: all mandatory rules pass with sufficient evidence;
+- DENY: a mandatory rule is contradicted or fails;
+- APPROVAL_REQUIRED: a defined exception or policy-controlled uncertainty requires human approval.
+
+The decision must list each rule, evidence IDs, reasons, contradictions, unresolved claims, policy version, and exact release subject. It must be reproducible from the same inputs.
+
+## 5. Dependency graph, not a fixed seven-box taxonomy
+
+The current receipt cycle is a useful experiment. The target product should represent a dependency graph rather than assume that exactly seven evaluators are the permanent architecture.
+
+For example:
+
+- API removal claim depends on base and candidate API snapshots.
+- Deprecation-window claim depends on the applicable policy, published-release history, and native warning observations.
+- Artifact-consistency claim depends on source, sdist, wheel, and installed-artifact digests.
+- Provenance claim depends on cryptographic attestation, trusted identity, workflow identity, and artifact digest.
+- Final release decision depends on all mandatory claims and their scoped evidence.
+
+A dependency should be explicit and typed. A failed prerequisite must create a downstream UNVERIFIED result, not an artificial PASS.
+
+## 6. Execution and isolation
+
+The final implementation should separate safe artifact inspection from execution of package code.
+
+- Parse archives without extracting untrusted paths into the workspace.
+- Apply archive member-count, compressed-size, expanded-size, and time limits.
+- Inspect source statically where possible.
+- Install and import candidate wheels only in a disposable environment with no secrets and minimal permissions.
+- Keep package import and plugin loading out of the control process.
+- Run external tools with bounded resources and captured output.
+- Treat repository files, issue text, release notes, metadata, and adapter output as untrusted data, never as instructions.
+
+The current import evaluator imports the installed package in its executing environment. This is not a sandbox.
+
+## 7. Reporting
+
+The machine-readable report should have a versioned schema and stable IDs. It should preserve:
+
+- subject identity and digest;
+- policy identity and digest;
+- rule-level outcomes;
+- evidence references and provenance status;
+- contradictions and missing evidence;
+- tool versions and execution IDs;
+- decision and exit status;
+- reproducibility instructions.
+
+A human report may summarize the result, but must link every conclusion to its underlying record. It must not hide missing evidence behind a score.
+
+## 8. Architectural migration
+
+1. Declare runtime receipt orchestration authoritative or replace it with a better single path.
+2. Convert gate.py into a tested adapter over the authoritative path or remove it through a compatibility plan.
+3. Version the report and receipt schemas.
+4. Replace opaque evidence dictionaries with validated, immutable records.
+5. Add adapter boundaries without embedding third-party tool logic in evaluators.
+6. Add policy and historical evidence only after the canonical evidence model exists.
