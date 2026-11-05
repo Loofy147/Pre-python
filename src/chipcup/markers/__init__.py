@@ -10,7 +10,7 @@ from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from chipcup._contracts import (
-    AuditReceipt, BoundaryReceipt, MatrixRow as MarkerRow,
+    AuditReceipt, AuditVerdict, BoundaryReceipt, MatrixRow as MarkerRow,
     ReceiptState, unavailable,
 )
 
@@ -115,7 +115,7 @@ def receipt_from_types(
     """Select only marker rows permitted by PEP 440 and typed contracts."""
     if type_receipt is None or type_receipt.state is not ReceiptState.PASS:
         return unavailable(
-            "markers", "MARKER_MATRIX",
+            "markers", AuditVerdict.MARKER_MATRIX,
             "verified type-contract receipt is absent",
         )
     try:
@@ -134,18 +134,18 @@ def receipt_from_types(
         )
         if unknown:
             return BoundaryReceipt(
-                "markers", "MARKER_MATRIX", ReceiptState.FAIL,
+                "markers", AuditVerdict.MARKER_MATRIX, ReceiptState.FAIL,
                 {"evaluations": [item.log_line for item in result.evaluations]},
                 ("marker rows selected unknown type contract sets: " + ", ".join(unknown),),
             )
         if not result.selected_rows:
             return BoundaryReceipt(
-                "markers", "MARKER_MATRIX", ReceiptState.UNVERIFIED,
+                "markers", AuditVerdict.MARKER_MATRIX, ReceiptState.UNVERIFIED,
                 {"evaluations": [item.log_line for item in result.evaluations]},
                 ("no marker row was selected; platform coverage is unverified",),
             )
         return BoundaryReceipt(
-            "markers", "MARKER_MATRIX", ReceiptState.PASS,
+            "markers", AuditVerdict.MARKER_MATRIX, ReceiptState.PASS,
             {
                 "selected_rows": list(result.selected_rows),
                 "selected_stub_sets": list(result.selected_stub_sets),
@@ -158,10 +158,10 @@ def receipt_from_types(
         )
     except (InvalidVersion, ValueError, TypeError, KeyError) as error:
         return BoundaryReceipt(
-            "markers", "MARKER_MATRIX", ReceiptState.FAIL, {},
+            "markers", AuditVerdict.MARKER_MATRIX, ReceiptState.FAIL, {},
             (f"marker matrix cannot be evaluated: {type(error).__name__}: {error}",),
         )
 
 
 def degraded_receipt() -> BoundaryReceipt:
-    return unavailable("markers", "MARKER_MATRIX", "typed stub contract receipt is unavailable")
+    return unavailable("markers", AuditVerdict.MARKER_MATRIX, "typed stub contract receipt is unavailable")
