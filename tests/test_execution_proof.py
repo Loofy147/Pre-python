@@ -47,13 +47,13 @@ def test_notch_perturbation_uses_derived_tolerance():
 
 
 def test_each_boundary_has_an_explicit_degraded_verdict():
-    from chipcup.build import degraded_receipt as build_degraded
-    from chipcup.deprecations import degraded_receipt as deprecations_degraded
-    from chipcup.imports import degraded_receipt as imports_degraded
-    from chipcup.licenses import degraded_receipt as licenses_degraded
-    from chipcup.markers import degraded_receipt as markers_degraded
-    from chipcup.types import degraded_receipt as types_degraded
-    from chipcup.versions import degraded_receipt as versions_degraded
+    from chipcup.build import degraded_build_receipt as build_degraded
+    from chipcup.deprecations import degraded_deprecation_receipt as deprecations_degraded
+    from chipcup.imports import degraded_import_receipt as imports_degraded
+    from chipcup.licenses import degraded_license_receipt as licenses_degraded
+    from chipcup.markers import degraded_marker_receipt as markers_degraded
+    from chipcup.types import degraded_type_receipt as types_degraded
+    from chipcup.versions import degraded_version_receipt as versions_degraded
 
     actual = {
         "build": build_degraded(),
