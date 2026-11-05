@@ -10,7 +10,11 @@ from packaging.version import InvalidVersion, Version
 
 from chipcup._contracts import AuditVerdict, BoundaryReceipt, MatrixRow as MarkerRow, ReceiptState, unavailable
 
-__all__ = ["VersionAudit", "VersionPolicy", "parse_version"    "degraded_receipt",
+__all__ = [
+    "VersionAudit",
+    "VersionPolicy",
+    "parse_version",
+    "degraded_receipt",
     "receipt_from_imports",
 ]
 
