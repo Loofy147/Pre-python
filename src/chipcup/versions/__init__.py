@@ -14,7 +14,7 @@ __all__ = [
     "VersionAudit",
     "VersionPolicy",
     "parse_version",
-    "degraded_receipt",
+    "degraded_version_receipt",
     "receipt_from_imports",
 ]
 
@@ -125,5 +125,5 @@ def receipt_from_imports(
         )
 
 
-def degraded_receipt() -> BoundaryReceipt:
+def degraded_version_receipt() -> BoundaryReceipt:
     return unavailable("versions", AuditVerdict.VERSION_HISTORY, "canonical import receipt or release metadata is unavailable")
