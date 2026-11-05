@@ -19,19 +19,18 @@ import json
 import math
 
 from chipcup._contracts import (
-    AuditReceipt, BoundaryReceipt, BuildEvidence, ReceiptState, unavailable,
+    AuditReceipt, AuditVerdict, BoundaryReceipt, BuildEvidence as _BuildEvidence, ReceiptState, unavailable,
 )
 
 __all__ = [
     "ArtifactComparison",
     "ArtifactInfo",
-    "BuildEvidence",
     "accept_type_receipt",
     "compare_artifacts",
     "inspect_artifact",
     "require_license_coverage",
     "close_version_cycle",
-    "degraded_receipt",
+    "degraded_build_receipt",
     "evaluate_artifact_receipt",
     "measure_notch",
     "read_artifact_member",
@@ -83,7 +82,7 @@ class ArtifactComparison:
         )
 
 
-def accept_type_receipt(receipt: object) -> BuildEvidence:
+def accept_type_receipt(receipt: object) -> _BuildEvidence:
     if not isinstance(receipt, AuditReceipt):
         raise TypeError("build requires an AuditReceipt")
     digest = receipt.source_digest
@@ -95,7 +94,7 @@ def accept_type_receipt(receipt: object) -> BuildEvidence:
         raise ValueError("source_digest is not hexadecimal") from error
     if receipt.passed is not True:
         raise ValueError("failed type audit cannot enter the build boundary")
-    return BuildEvidence(source_digest=digest.lower(), passed=True)
+    return _BuildEvidence(source_digest=digest.lower(), passed=True)
 
 
 def _metadata_info(data: bytes) -> tuple[
@@ -555,9 +554,9 @@ def validate_notch_profile(
     return {
         "passed": maximum <= tolerance,
         "verdict": (
-            "FIXTURE_GEOMETRY_WITHIN_TOLERANCE"
+            AuditVerdict.FIXTURE_GEOMETRY_WITHIN_TOLERANCE.value
             if maximum <= tolerance
-            else "FIXTURE_GEOMETRY_OUT_OF_TOLERANCE"
+            else AuditVerdict.FIXTURE_GEOMETRY_OUT_OF_TOLERANCE.value
         ),
         "expected_notch_depth_mm": round(expected_depth, 6),
         "tolerance_mm": tolerance,
@@ -579,7 +578,7 @@ def evaluate_artifact_receipt(
     wheel = Path(wheel_path)
     if not sdist.is_file() or not wheel.is_file():
         return unavailable(
-            "build", "BUILD_PROVENANCE",
+            "build", AuditVerdict.BUILD_PROVENANCE,
             "required sdist or wheel is absent; artifact provenance was not checked",
         )
     try:
@@ -635,19 +634,19 @@ def evaluate_artifact_receipt(
         }
         if not build_isolation_verified:
             return BoundaryReceipt(
-                "build", "BUILD_PROVENANCE", ReceiptState.UNVERIFIED,
+                "build", AuditVerdict.BUILD_PROVENANCE, ReceiptState.UNVERIFIED,
                 evidence, tuple(issues + [
                     "build isolation was unavailable; shipped artifacts were inspected but provenance is unverified"
                 ]),
             )
         return BoundaryReceipt(
-            "build", "BUILD_PROVENANCE",
+            "build", AuditVerdict.BUILD_PROVENANCE,
             ReceiptState.FAIL if issues else ReceiptState.PASS,
             evidence, tuple(issues),
         )
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
         return BoundaryReceipt(
-            "build", "BUILD_PROVENANCE", ReceiptState.FAIL, {},
+            "build", AuditVerdict.BUILD_PROVENANCE, ReceiptState.FAIL, {},
             (f"{type(error).__name__}: {error}",),
         )
 
@@ -658,22 +657,22 @@ def close_version_cycle(
 ) -> BoundaryReceipt:
     """Close versions→build only when both upstream receipts are verified."""
     if build_receipt is None or version_receipt is None:
-        return unavailable("build", "BUILD_RELEASE_IDENTITY", "version or build receipt is absent")
+        return unavailable("build", AuditVerdict.BUILD_RELEASE_IDENTITY, "version or build receipt is absent")
     if build_receipt.state is not ReceiptState.PASS or version_receipt.state is not ReceiptState.PASS:
         return unavailable(
-            "build", "BUILD_RELEASE_IDENTITY",
+            "build", AuditVerdict.BUILD_RELEASE_IDENTITY,
             "upstream version or artifact evidence is not verified",
         )
     artifact_version = str(build_receipt.evidence.get("version", ""))
     installed_version = str(version_receipt.evidence.get("installed_version", ""))
     matches = bool(artifact_version and artifact_version == installed_version)
     return BoundaryReceipt(
-        "build", "BUILD_RELEASE_IDENTITY",
+        "build", AuditVerdict.BUILD_RELEASE_IDENTITY,
         ReceiptState.PASS if matches else ReceiptState.FAIL,
         {"artifact_version": artifact_version, "installed_version": installed_version},
         () if matches else ("installed metadata version differs from built artifact version",),
     )
 
 
-def degraded_receipt() -> BoundaryReceipt:
-    return unavailable("build", "BUILD_PROVENANCE", "build inputs or provenance evidence are unavailable")
+def degraded_build_receipt() -> BoundaryReceipt:
+    return unavailable("build", AuditVerdict.BUILD_PROVENANCE, "build inputs or provenance evidence are unavailable")

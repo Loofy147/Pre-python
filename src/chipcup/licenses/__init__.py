@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from chipcup._contracts import BoundaryReceipt, ReceiptState, unavailable
+from chipcup._contracts import AuditVerdict, BoundaryReceipt, ReceiptState, unavailable
 
 __all__ = [
     "DEFAULT_LICENSE_REFS",
@@ -19,7 +19,7 @@ __all__ = [
     "license_references",
     "parse_license_expression",
     "validate_compatibility",
-    "degraded_receipt",
+    "degraded_license_receipt",
     "receipt_from_build",
 ]
 
@@ -311,7 +311,7 @@ def receipt_from_build(
     """Consume the actual archive manifest; never request a rebuild."""
     if build_receipt is None or build_receipt.state is not ReceiptState.PASS:
         return unavailable(
-            "licenses", "LICENSE_COVERAGE",
+            "licenses", AuditVerdict.LICENSE_COVERAGE,
             "verified build manifest is absent or not in PASS state",
         )
     evidence = build_receipt.evidence
@@ -348,16 +348,16 @@ def receipt_from_build(
             "covered_paths": list(files),
         }
         return BoundaryReceipt(
-            "licenses", "LICENSE_COVERAGE",
+            "licenses", AuditVerdict.LICENSE_COVERAGE,
             ReceiptState.PASS if result.passed else ReceiptState.FAIL,
             coverage, result.issues,
         )
     except (KeyError, TypeError, ValueError) as error:
         return BoundaryReceipt(
-            "licenses", "LICENSE_COVERAGE", ReceiptState.FAIL, {},
+            "licenses", AuditVerdict.LICENSE_COVERAGE, ReceiptState.FAIL, {},
             (f"license manifest cannot be consumed: {error}",),
         )
 
 
-def degraded_receipt() -> BoundaryReceipt:
-    return unavailable("licenses", "LICENSE_COVERAGE", "build manifest is unavailable")
+def degraded_license_receipt() -> BoundaryReceipt:
+    return unavailable("licenses", AuditVerdict.LICENSE_COVERAGE, "build manifest is unavailable")

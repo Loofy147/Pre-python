@@ -8,9 +8,13 @@ from typing import Sequence
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from chipcup._contracts import BoundaryReceipt, MatrixRow as MarkerRow, ReceiptState, unavailable
+from chipcup._contracts import AuditVerdict, BoundaryReceipt, MatrixRow as MarkerRow, ReceiptState, unavailable
 
-__all__ = ["VersionAudit", "VersionPolicy", "parse_version"    "degraded_receipt",
+__all__ = [
+    "VersionAudit",
+    "VersionPolicy",
+    "parse_version",
+    "degraded_version_receipt",
     "receipt_from_imports",
 ]
 
@@ -87,7 +91,7 @@ def receipt_from_imports(
     """Order and constrain the release only after canonical import is verified."""
     if import_receipt is None or import_receipt.state is not ReceiptState.PASS:
         return unavailable(
-            "versions", "VERSION_HISTORY",
+            "versions", AuditVerdict.VERSION_HISTORY,
             "canonical import receipt is absent or failed",
         )
     try:
@@ -101,7 +105,7 @@ def receipt_from_imports(
             imported, installed, specifier=version_specifier
         )
         return BoundaryReceipt(
-            "versions", "VERSION_HISTORY",
+            "versions", AuditVerdict.VERSION_HISTORY,
             ReceiptState.PASS if result.passed else ReceiptState.FAIL,
             {
                 "imported_version": str(result.imported),
@@ -116,10 +120,10 @@ def receipt_from_imports(
         )
     except Exception as error:
         return BoundaryReceipt(
-            "versions", "VERSION_HISTORY", ReceiptState.FAIL, {},
+            "versions", AuditVerdict.VERSION_HISTORY, ReceiptState.FAIL, {},
             (f"version identity could not be verified: {type(error).__name__}: {error}",),
         )
 
 
-def degraded_receipt() -> BoundaryReceipt:
-    return unavailable("versions", "VERSION_HISTORY", "canonical import receipt or release metadata is unavailable")
+def degraded_version_receipt() -> BoundaryReceipt:
+    return unavailable("versions", AuditVerdict.VERSION_HISTORY, "canonical import receipt or release metadata is unavailable")

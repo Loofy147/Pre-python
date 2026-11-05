@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import json
 import subprocess
 import sys
-from pathlib import Path
 
-from chipcup._contracts import ReceiptState, unavailable
+import pytest
+from pathlib import Path
+from typing import cast
+
+from chipcup._contracts import AuditVerdict, BoundaryReceipt, ReceiptState, unavailable
 from chipcup.build import measure_notch, validate_notch_profile
 from chipcup.runtime import degraded_operation_matrix
 
@@ -43,13 +47,13 @@ def test_notch_perturbation_uses_derived_tolerance():
 
 
 def test_each_boundary_has_an_explicit_degraded_verdict():
-    from chipcup.build import degraded_receipt as build_degraded
-    from chipcup.deprecations import degraded_receipt as deprecations_degraded
-    from chipcup.imports import degraded_receipt as imports_degraded
-    from chipcup.licenses import degraded_receipt as licenses_degraded
-    from chipcup.markers import degraded_receipt as markers_degraded
-    from chipcup.types import degraded_receipt as types_degraded
-    from chipcup.versions import degraded_receipt as versions_degraded
+    from chipcup.build import degraded_build_receipt as build_degraded
+    from chipcup.deprecations import degraded_deprecation_receipt as deprecations_degraded
+    from chipcup.imports import degraded_import_receipt as imports_degraded
+    from chipcup.licenses import degraded_license_receipt as licenses_degraded
+    from chipcup.markers import degraded_marker_receipt as markers_degraded
+    from chipcup.types import degraded_type_receipt as types_degraded
+    from chipcup.versions import degraded_version_receipt as versions_degraded
 
     actual = {
         "build": build_degraded(),
@@ -63,7 +67,54 @@ def test_each_boundary_has_an_explicit_degraded_verdict():
     assert set(actual) == set(degraded_operation_matrix())
     for key, receipt in actual.items():
         assert receipt.state is ReceiptState.UNVERIFIED
-        assert receipt.verdict == degraded_operation_matrix()[key]
+        assert isinstance(receipt.verdict, AuditVerdict)
+        assert receipt.verdict is degraded_operation_matrix()[key]
+        assert receipt.to_dict()["verdict"] == receipt.verdict.value
+
+
+def test_subpackage_public_surfaces_are_disjoint_and_complete():
+    packages = (
+        "build", "licenses", "types", "markers",
+        "deprecations", "imports", "versions",
+    )
+    owner_by_name: dict[str, str] = {}
+    for package in packages:
+        module = importlib.import_module(f"chipcup.{package}")
+        for name in module.__all__:
+            assert name not in owner_by_name, (
+                f"public name {name!r} is exported by both "
+                f"{owner_by_name.get(name)!r} and {package!r}"
+            )
+            owner_by_name[name] = package
+    assert owner_by_name["BuildEvidence"] == "types"
+    expected_degraded_helpers = {
+        "degraded_build_receipt", "degraded_license_receipt",
+        "degraded_type_receipt", "degraded_marker_receipt",
+        "degraded_deprecation_receipt", "degraded_import_receipt",
+        "degraded_version_receipt",
+    }
+    assert expected_degraded_helpers.issubset(owner_by_name)
+    assert {
+        "VersionAudit", "VersionPolicy", "parse_version",
+        "degraded_version_receipt", "receipt_from_imports",
+    }.issubset(set(importlib.import_module("chipcup.versions").__all__))
+    assert not hasattr(importlib.import_module("chipcup.build"), "BuildEvidence")
+
+
+def test_boundary_verdict_vocabulary_is_closed_and_serialization_stable():
+    expected = {
+        "BUILD_PROVENANCE", "BUILD_RELEASE_IDENTITY", "LICENSE_COVERAGE",
+        "TYPE_SURFACE", "MARKER_MATRIX", "DEPRECATION_WINDOW",
+        "IMPORT_AUDIT", "VERSION_HISTORY",
+        "FIXTURE_GEOMETRY_WITHIN_TOLERANCE",
+        "FIXTURE_GEOMETRY_OUT_OF_TOLERANCE",
+    }
+    assert {item.value for item in AuditVerdict} == expected
+    assert isinstance(AuditVerdict.BUILD_PROVENANCE, str)
+    with pytest.raises(TypeError, match="verdict must be an AuditVerdict member"):
+        BoundaryReceipt(
+            "probe", cast(AuditVerdict, "UNREGISTERED"), ReceiptState.FAIL
+        )
 
 
 def test_no_evaluator_imports_another_evaluator():

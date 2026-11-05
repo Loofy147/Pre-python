@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping, Protocol, TypeVar, runtime_checkable
 
 from chipcup._contracts import (
-    AuditReceipt, BoundaryReceipt, BuildEvidence, ReceiptState, unavailable,
+    AuditReceipt, AuditVerdict, BoundaryReceipt, BuildEvidence, ReceiptState, unavailable,
 )
 
 __all__ = [
@@ -23,7 +23,7 @@ __all__ = [
     "is_any",
     "load",
     "prepare_build_receipt",
-    "degraded_receipt",
+    "degraded_type_receipt",
     "receipt_from_license",
 ]
 
@@ -155,7 +155,7 @@ def receipt_from_license(
     """Accept stub contracts only when their files are licensed and shipped."""
     if license_receipt is None or license_receipt.state is not ReceiptState.PASS:
         return unavailable(
-            "types", "TYPE_SURFACE",
+            "types", AuditVerdict.TYPE_SURFACE,
             "verified license receipt is absent; stub contract scope is unverified",
         )
     manifest_path = Path(root) / "src" / "chipcup" / "stub-contracts.json"
@@ -189,7 +189,7 @@ def receipt_from_license(
             missing.append("chipcup/py.typed")
         ok = not missing
         return BoundaryReceipt(
-            "types", "TYPE_SURFACE",
+            "types", AuditVerdict.TYPE_SURFACE,
             ReceiptState.PASS if ok else ReceiptState.FAIL,
             {"contract_sets": contracts, "wheel_stub_files": sorted(wheel_members.intersection(
                 path for paths in contracts.values() for path in paths
@@ -198,10 +198,10 @@ def receipt_from_license(
         )
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         return BoundaryReceipt(
-            "types", "TYPE_SURFACE", ReceiptState.FAIL, {},
+            "types", AuditVerdict.TYPE_SURFACE, ReceiptState.FAIL, {},
             (f"stub contract audit failed: {type(error).__name__}: {error}",),
         )
 
 
-def degraded_receipt() -> BoundaryReceipt:
-    return unavailable("types", "TYPE_SURFACE", "license receipt or typed stub manifest is unavailable")
+def degraded_type_receipt() -> BoundaryReceipt:
+    return unavailable("types", AuditVerdict.TYPE_SURFACE, "license receipt or typed stub manifest is unavailable")
