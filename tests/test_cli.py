@@ -7,7 +7,7 @@ from pathlib import Path
 from chipcup.cli import main
 
 
-def test_missing_gate_module_returns_exit_code_three(
+def test_missing_runtime_module_returns_exit_code_three(
     monkeypatch, capsys, tmp_path: Path
 ):
     original_import = builtins.__import__
@@ -19,8 +19,8 @@ def test_missing_gate_module_returns_exit_code_three(
         fromlist: tuple[str, ...] = (),
         level: int = 0,
     ) -> object:
-        if name == "chipcup.gate":
-            raise ModuleNotFoundError("No module named 'chipcup.gate'")
+        if name == "chipcup.runtime":
+            raise ModuleNotFoundError("No module named 'chipcup.runtime'")
         return original_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", import_without_gate)

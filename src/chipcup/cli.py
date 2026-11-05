@@ -5,11 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Mapping, Sequence, cast
+from typing import Mapping, Sequence, cast
 
-if TYPE_CHECKING:
-    from chipcup.deprecations import WarningObservation
-    from chipcup.markers import MarkerRow
+from chipcup._contracts import MatrixRow, WarningObservation
 
 
 def _string(
@@ -33,13 +31,11 @@ def _environment(values: Mapping[str, object]) -> Mapping[str, str]:
     return result
 
 
-def load_matrix(path: Path) -> tuple[MarkerRow, ...]:
-    from chipcup.markers import MarkerRow
-
+def load_matrix(path: Path) -> tuple[MatrixRow, ...]:
     decoded: object = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(decoded, list):
         raise ValueError("marker matrix must be a JSON array")
-    rows: list[MarkerRow] = []
+    rows: list[MatrixRow] = []
     for raw in cast(list[object], decoded):
         if not isinstance(raw, dict):
             raise ValueError("each marker matrix row must be an object")
@@ -48,7 +44,7 @@ def load_matrix(path: Path) -> tuple[MarkerRow, ...]:
         if extra_value is not None and not isinstance(extra_value, str):
             raise ValueError("matrix extra must be a string when supplied")
         rows.append(
-            MarkerRow(
+            MatrixRow(
                 name=_string(values, "name"),
                 expression=_string(values, "expression"),
                 stub_set=_string(values, "stub_set"),
@@ -61,8 +57,6 @@ def load_matrix(path: Path) -> tuple[MarkerRow, ...]:
 
 
 def load_warning_observations(path: Path) -> tuple[WarningObservation, ...]:
-    from chipcup.deprecations import WarningObservation
-
     files = sorted(path.glob("*.json")) if path.is_dir() else [path]
     observations: list[WarningObservation] = []
     for item in files:
@@ -120,27 +114,13 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        # Delay package imports until the guarded execution path so a missing
-        # subpackage is reported with the documented exit code 3.
-        from chipcup.gate import GateRequest, evaluate_release
-
         rows = load_matrix(args.matrix)
         observations = load_warning_observations(args.warning_evidence)
-        report = evaluate_release(
-            GateRequest(
-                sdist_path=args.sdist,
-                wheel_path=args.wheel,
-                project_root=args.project_root,
-                version_specifier=args.version_specifier,
-                marker_rows=rows,
-                warning_observations=observations,
-            )
-        )
-        # Lazy entry boundary: importing chipcup.cli alone never loads
-        # the receipt-cycle orchestrator or any evaluator package.
+        # This is the sole lazy evaluator import. Removing it leaves the
+        # installed console entry point without its receipt-cycle dispatcher.
         from chipcup.runtime import run_receipt_cycle
 
-        receipt_cycle = run_receipt_cycle(
+        report = run_receipt_cycle(
             sdist_path=args.sdist,
             wheel_path=args.wheel,
             project_root=args.project_root,
@@ -151,35 +131,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             build_isolation_verified=True,
         )
     except ModuleNotFoundError as error:
-        print(
-            json.dumps(
-                {
-                    "passed": False,
-                    "failure": "module-not-found",
-                    "message": str(error),
-                },
-                indent=2,
-            )
-        )
+        print(json.dumps({
+            "passed": False,
+            "failure": "module-not-found",
+            "message": str(error),
+        }, indent=2))
         return 3
     except Exception as error:
-        print(
-            json.dumps(
-                {
-                    "passed": False,
-                    "failure": "audit-error",
-                    "message": f"{type(error).__name__}: {error}",
-                },
-                indent=2,
-            )
-        )
+        print(json.dumps({
+            "passed": False,
+            "failure": "audit-error",
+            "message": f"{type(error).__name__}: {error}",
+        }, indent=2))
         return 1
 
-    payload = report.to_dict()
-    payload["receipt_cycle"] = receipt_cycle
-    print(json.dumps(payload, indent=2, default=str))
-    return 0 if report.passed and receipt_cycle["passed"] else 1
-
-
+    print(json.dumps(report, indent=2, default=str))
+    return 0 if report["passed"] else 1
 if __name__ == "__main__":
     raise SystemExit(main())

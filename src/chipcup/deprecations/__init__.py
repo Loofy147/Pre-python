@@ -13,7 +13,9 @@ from typing import Callable, Mapping, Sequence
 
 from packaging.version import Version
 
-from chipcup._contracts import BoundaryReceipt, ReceiptState, unavailable
+from chipcup._contracts import (
+    BoundaryReceipt, ReceiptState, WarningObservation, unavailable,
+)
 
 __all__ = [
     "DeprecationAuditResult",
@@ -24,16 +26,6 @@ __all__ = [
     "validate_schedules",
     "warn_deprecated",
 ]
-
-
-@dataclass(frozen=True, slots=True)
-class WarningObservation:
-    release: str
-    matrix_row: str
-    marker_selected: bool
-    emitted: bool
-    warning_count: int
-    platform: str = ""
 
 
 @dataclass(frozen=True, slots=True)

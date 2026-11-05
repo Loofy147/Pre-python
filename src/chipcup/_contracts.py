@@ -72,3 +72,12 @@ class MatrixRow:
     version_specifier: str = ">=0"
     environment: Mapping[str, str] = field(default_factory=dict)
     extra: str | None = None
+
+@dataclass(frozen=True, slots=True)
+class WarningObservation:
+    release: str
+    matrix_row: str
+    marker_selected: bool
+    emitted: bool
+    warning_count: int
+    platform: str = ""
