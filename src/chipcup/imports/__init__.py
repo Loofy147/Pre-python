@@ -11,7 +11,7 @@ from types import ModuleType
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from chipcup._contracts import BoundaryReceipt, ReceiptState, unavailable
+from chipcup._contracts import AuditVerdict, BoundaryReceipt, ReceiptState, unavailable
 
 __all__ = [
     "EntryPointRef",
@@ -131,7 +131,7 @@ def receipt_from_deprecations(
     """Validate import identity only after the removal policy is verified."""
     if deprecation_receipt is None or deprecation_receipt.state is not ReceiptState.PASS:
         return unavailable(
-            "imports", "IMPORT_AUDIT",
+            "imports", AuditVerdict.IMPORT_AUDIT,
             "deprecation policy receipt is absent or unresolved",
         )
     try:
@@ -145,17 +145,17 @@ def receipt_from_deprecations(
             "public_names": list(result.public_names),
         }
         return BoundaryReceipt(
-            "imports", "IMPORT_AUDIT",
+            "imports", AuditVerdict.IMPORT_AUDIT,
             ReceiptState.PASS if result.passed else ReceiptState.FAIL,
             evidence,
             tuple("unresolved public import name: " + item for item in result.unresolved_public_names),
         )
     except (ImportError, AttributeError, ModuleNotFoundError) as error:
         return BoundaryReceipt(
-            "imports", "IMPORT_AUDIT", ReceiptState.FAIL, {},
+            "imports", AuditVerdict.IMPORT_AUDIT, ReceiptState.FAIL, {},
             (f"{type(error).__name__}: {error}",),
         )
 
 
 def degraded_receipt() -> BoundaryReceipt:
-    return unavailable("imports", "IMPORT_AUDIT", "deprecation receipt or import target is unavailable")
+    return unavailable("imports", AuditVerdict.IMPORT_AUDIT, "deprecation receipt or import target is unavailable")
